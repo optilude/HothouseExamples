@@ -36,7 +36,7 @@ using daisysp::fonepole;
 
 /// Increment this when changing the settings struct so the software will know
 /// to reset to defaults if this ever changes.
-#define SETTINGS_VERSION 2
+#define SETTINGS_VERSION 3
 
 Hothouse hw;
 
@@ -699,7 +699,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // Set oscillator waveform based on mode (not used for harmonic)
     if (trem_mode == TREMOLO_SQUARE) {
       osc.SetWaveform(FlickOscillator::WAVE_SQUARE_ROUNDED);
-    } else if (trem_mode == TREMOLO_SINE) {
+    } else if (trem_mode == TREMOLO_SINE || trem_mode == TREMOLO_HARMONIC) {
       osc.SetWaveform(FlickOscillator::WAVE_SIN);
     }
     // For harmonic mode, waveform doesn't matter much (use sine)
@@ -1055,7 +1055,7 @@ int main() {
     if(trigger_settings_save) {
 			SavedSettings.Save(); // Writing locally stored settings to the external flash
 			trigger_settings_save = false;
-		} else if (is_factory_reset_mode) {
+	} else if (is_factory_reset_mode) {
       hw.ProcessAllControls();
 
       static uint32_t last_led_toggle_time = 0;
