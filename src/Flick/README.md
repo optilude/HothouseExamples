@@ -8,9 +8,9 @@ This is a reverb, tremolo, and delay pedal. The original goal of this pedal was 
 
 **Platerra Reverb:** This is a plate reverb based on the Dattorro reverb.
 
-**Tremolo:** Tremolo with smooth sine wave, triangle, and square wave settings.
+**Tremolo:** Tremolo with sine wave, square wave, and **harmonic tremolo** settings. Harmonic tremolo splits the signal into high and low frequency bands and modulates them 180° out of phase for a swirling, phase-like effect.
 
-**Delay:** Basic digital delay.
+**Delay:** Digital delay with **tap tempo** and **delay subdivisions** (normal, dotted eighth, quarter note triplet).
 
 ### Demo
 
@@ -29,17 +29,45 @@ Updated demo video (6 January 2025):
 | KNOB 1 | Reverb Dry/Wet Amount |  |
 | KNOB 2 | Tremolo Speed |  |
 | KNOB 3 | Tremolo Depth |  |
-| KNOB 4 | Delay Time |  |
+| KNOB 4 | Delay Time | Sets master tempo for delay subdivisions. Overridden by tap tempo until knob is moved >5%. |
 | KNOB 5 | Delay Feedback |  |
 | KNOB 6 | Delay Dry/Wet Amount |  |
-| SWITCH 1 | Reverb knob funcion | **UP** - 0% Dry, 0-100% Wet<br/>**MIDDLE** - Dry/Wet Mix<br/>**DOWN** - 100% Dry, 0-100% Wet |
-| SWITCH 2 | Tremolo Waveform | **UP** - Square<br/>**MIDDLE** - Triangle<br/>**DOWN** - Sine |
-| SWITCH 3 | Trem & Delay Makeup Gain | **UP** - Plus<br/>**MIDDLE** - Normal<br/>**DOWN** - None |
-| FOOTSWITCH 1 | Reverb On/Off | Normal press toggles reverb on/off.<br/>Double press toggles reverb edit mode (see below).<br/>Long press for DFU mode. |
-| FOOTSWITCH 2 | Delay/Tremolo On/Off | Normal press toggles delay.<br/>Double press toggles tremolo.<br/>Long press for **Mono-Stereo Edit mode** (see below).<br/><br/>**LED:**<br/>- 100% when only relay is active<br/>- 40% pulsing when only tremolo is active<br/>- 100% pulsing when both are active |
+| SWITCH 1 | Reverb knob function | **UP** - 0% Dry, 0-100% Wet<br/>**MIDDLE** - Dry/Wet Mix<br/>**DOWN** - 100% Dry, 0-100% Wet |
+| SWITCH 2 | Tremolo Mode | **UP** - Square wave<br/>**MIDDLE** - Sine wave<br/>**DOWN** - **Harmonic tremolo** |
+| SWITCH 3 | Delay Subdivision | **UP** - Dotted eighth (1.5x)<br/>**MIDDLE** - Normal (1:1)<br/>**DOWN** - Quarter note triplet (1.333x) |
+| FOOTSWITCH 1 | Reverb On/Off | **Press:** Toggle reverb on/off<br/>**Double-press:** Enter **Tap Tempo mode** (see below)<br/>**Long press:** Enter **Reverb Edit mode** (see below) |
+| FOOTSWITCH 2 | Delay/Tremolo On/Off | **Press:** Toggle delay on/off<br/>**Double-press:** Toggle tremolo on/off<br/>**Long press:** Enter **Mono-Stereo Edit mode** (see below)<br/><br/>**LED:**<br/>- 100% when only delay is active<br/>- 40% pulsing when only tremolo is active<br/>- 100% pulsing when both are active |
+
+### DFU Mode (Firmware Update)
+
+To enter DFU mode for firmware updates via USB:
+- **Hold both footswitches for 5+ seconds**
+- LEDs will flash alternately 5 times, then device enters bootloader mode
+- Use `make program_dfu` to flash new firmware
+
+### Controls (Tap Tempo Mode)
+
+*Entered by double-pressing FOOTSWITCH 1 in normal mode.*
+
+**LED Indication:**
+- **LED 1 (left):** Solid on
+- **LED 2 (right):** Blinks at current tempo (slow pulse if no tempo set yet)
+
+| CONTROL | DESCRIPTION | NOTES |
+|-|-|-|
+| FOOTSWITCH 1 | **EXIT** Tap Tempo Mode | Returns to normal mode without changing tempo |
+| FOOTSWITCH 2 | **TAP** Tempo | Each tap sets the delay time based on interval between taps<br/>Tempo range: 50ms - 4 seconds (15-1200 BPM) |
+
+**Behavior:**
+- Tap tempo overrides KNOB 4 (delay time knob)
+- Moving KNOB 4 more than 5% exits tap tempo and returns control to the knob
+- Delay subdivisions (SWITCH 3) apply to tap tempo time
+- Mode auto-exits after 5 seconds of no taps
+- Tap tempo does **not** persist across power cycles
 
 ### Controls (Reverb Edit Mode)
-*Both LEDs flash when in edit mode.*
+
+*Entered by long-pressing FOOTSWITCH 1. Both LEDs flash synchronously when in edit mode.*
 
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
@@ -52,18 +80,21 @@ Updated demo video (6 January 2025):
 | SWITCH 1 | Tank Mod Speed | **UP** - High<br/>**MIDDLE** - Medium<br/>**DOWN** - Low |
 | SWITCH 2 | Tank Mod Depth | **UP** - High<br/>**MIDDLE** - Medium<br/>**DOWN** - Low |
 | SWITCH 3 | Tank Mod Shape | **UP** - High<br/>**MIDDLE** - Medium<br/>**DOWN** - Low |
-| FOOTSWITCH 1 | **CANEL** & Exit | Discards parameter changes and exits Reverb Edit Mode.<br/>Long press for DFU mode. |
-| FOOTSWITCH 2 | **SAVE** & Exit | Saves all parameters and exits Reverb Edit Mode. |
+| FOOTSWITCH 1 | **CANCEL** & Exit | Discards parameter changes and exits Reverb Edit Mode |
+| FOOTSWITCH 2 | **SAVE** & Exit | Saves all parameters and exits Reverb Edit Mode |
 
 ### Controls (Mono-Stereo Edit Mode)
 
-*Both LEDs flash alternatively when in Mono-Stereo Edit mode.*
+*Entered by long-pressing FOOTSWITCH 2. Both LEDs flash alternately when in Mono-Stereo Edit mode.*
 
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
-| SWITCH 3 | Mono-Stereo Mode | **UP** - Stereo In, Stereo Out<br/>**MIDDLE** - Mono in, Stereo Out<br/>**DOWN** - Mono in, Mono Out |
-| FOOTSWITCH 1 | **CANCEL** & Exit | Discards parameter changes and exits Mono-Stereo Edit Mode.<br/>Long press for DFU mode. |
-| FOOTSWITCH 2 | **SAVE** & Exit | Saves all parameters and exits Mono-Stereo Edit Mode. |
+| SWITCH 2 | **Makeup Gain** | **UP** - Heavy (+6dB delay, +4dB tremolo)<br/>**MIDDLE** - Normal (+4.4dB delay, +1.6dB tremolo)<br/>**DOWN** - None (0dB) |
+| SWITCH 3 | Mono-Stereo Mode | **UP** - Stereo In, Stereo Out<br/>**MIDDLE** - Mono In, Stereo Out<br/>**DOWN** - Mono In, Mono Out |
+| FOOTSWITCH 1 | **CANCEL** & Exit | Discards parameter changes and exits Mono-Stereo Edit Mode |
+| FOOTSWITCH 2 | **SAVE** & Exit | Saves makeup gain and mono-stereo settings, then exits |
+
+**Note:** Makeup gain setting is **saved to flash** and persists across power cycles.
 
 ### Factory Reset (Restore default reverb parameters)
 

@@ -36,7 +36,7 @@ using daisysp::fonepole;
 
 /// Increment this when changing the settings struct so the software will know
 /// to reset to defaults if this ever changes.
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2
 
 Hothouse hw;
 
@@ -44,8 +44,9 @@ Hothouse hw;
 
 enum PedalMode {
   PEDAL_MODE_NORMAL,
-  PEDAL_MODE_EDIT_REVERB,     // Edit mode activated by double-press of the left foot switch
-  PEDAL_MODE_EDIT_MONO_STEREO // Edit mode activated by holding Footswitch 1 at power-up
+  PEDAL_MODE_EDIT_REVERB,     // Edit mode activated by long-press of the left foot switch
+  PEDAL_MODE_EDIT_MONO_STEREO,// Edit mode activated by long-press of the right foot switch
+  PEDAL_MODE_TAP_TEMPO        // Tap tempo mode activated by double-press of left foot switch
 };
 
 enum MonoStereoMode {                       // Controlled by Toggle Switch 3
@@ -53,6 +54,28 @@ enum MonoStereoMode {                       // Controlled by Toggle Switch 3
   MS_MODE_MISO, // Mono In, Stereo Out      // TOGGLESWITCH_MIDDLE
   MS_MODE_SISO  // Stereo In, Stereo Out    // TOGGLESWITCH_UP
 };
+
+enum DelaySubdivision {
+  DELAY_SUBDIV_QUARTER_TRIPLET,  // 1.333x multiplier (DOWN)
+  DELAY_SUBDIV_NORMAL,            // 1.0x multiplier (MIDDLE)
+  DELAY_SUBDIV_DOTTED_EIGHTH,    // 1.5x multiplier (UP)
+};
+
+enum TremoloMode {
+  TREMOLO_HARMONIC,    // Harmonic tremolo (DOWN)
+  TREMOLO_SINE,        // Sine wave tremolo (MIDDLE)
+  TREMOLO_SQUARE,      // Square wave tremolo (UP)
+};
+
+// Tap tempo constants
+const uint32_t TAP_TEMPO_TIMEOUT_MS = 5000;     // Exit tap tempo after 5 seconds
+const uint32_t TAP_TEMPO_MIN_INTERVAL_MS = 50;  // Min 50ms = 1200 BPM (practical limit)
+const uint32_t TAP_TEMPO_MAX_INTERVAL_MS = 4000; // Max 4 seconds = 15 BPM
+const float TAP_TEMPO_SAMPLES_MIN = 2400.0f;    // 50ms at 48kHz
+const float TAP_TEMPO_SAMPLES_MAX = 192000.0f;  // 4s at 48kHz
+
+// DFU mode - both switches
+const uint32_t DFU_BOTH_SWITCHES_HOLD_TIME_MS = 5000;  // 5 seconds
 
 // Persistent Settings
 struct Settings {
@@ -66,6 +89,7 @@ struct Settings {
   float tankModShape;
   float preDelay;
   int monoStereoMode;
+  int makeupGainMode;       // Makeup gain setting
 
 	//Overloading the != operator
 	//This is necessary as this operator is used in the PersistentStorage source code
@@ -80,7 +104,8 @@ struct Settings {
       a.tankModDepth == tankModDepth &&
       a.tankModShape == tankModShape &&
       a.preDelay == preDelay &&
-      a.monoStereoMode == monoStereoMode
+      a.monoStereoMode == monoStereoMode &&
+      a.makeupGainMode == makeupGainMode
     );
   }
 };
@@ -146,10 +171,16 @@ constexpr TremDelMakeUpGain kMakeupGainMap[] = {
   TV_MAKEUP_GAIN_NONE,                        // DOWN
 };
 
-constexpr int kWaveformMap[] = {
-    FlickOscillator::WAVE_SQUARE_ROUNDED,     // UP
-    FlickOscillator::WAVE_TRI,                // MIDDLE
-    FlickOscillator::WAVE_SIN,                // DOWN
+constexpr TremoloMode kTremoloModeMap[] = {
+    TREMOLO_SQUARE,     // UP
+    TREMOLO_SINE,       // MIDDLE
+    TREMOLO_HARMONIC,   // DOWN
+};
+
+constexpr DelaySubdivision kDelaySubdivisionMap[] = {
+  DELAY_SUBDIV_DOTTED_EIGHTH,     // UP (1.5x)
+  DELAY_SUBDIV_NORMAL,            // MIDDLE (1.0x)
+  DELAY_SUBDIV_QUARTER_TRIPLET,  // DOWN (1.333x)
 };
 
 Delay delayL;
@@ -165,6 +196,33 @@ Led led_left, led_right;
 bool bypass_verb = true;
 bool bypass_trem = true;
 bool bypass_delay = true;
+
+// Tap tempo state
+bool tap_tempo_active = false;
+uint32_t tap_tempo_last_tap_time = 0;
+uint32_t tap_tempo_interval_ms = 0;
+float tap_tempo_delay_samples = 0.0f;
+bool tap_tempo_controls_delay = false;  // True when tap tempo overrides knob
+
+// Knob takeover for KNOB_4 (delay time)
+float knob4_last_value = 0.0f;
+const float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required
+
+// Master delay time (before subdivision multiplier)
+float master_delay_time_samples = 0.0f;
+
+// DFU mode detection
+uint32_t both_switches_press_start_time = 0;
+bool both_switches_pressed = false;
+
+// Current makeup gain setting (persisted)
+TremDelMakeUpGain current_makeup_gain = TV_MAKEUP_GAIN_NORMAL;
+
+// Harmonic tremolo state
+using daisysp::Svf;
+Svf harmonic_filter_L;  // State variable filter for crossover
+Svf harmonic_filter_R;
+const float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
 
 // Reverb vars
 bool plateDiffusionEnabled = true;
@@ -274,6 +332,15 @@ void load_settings() {
   mono_stereo_mode = static_cast<MonoStereoMode>(LocalSettings.monoStereoMode);
   update_reverb_scales(mono_stereo_mode);
 
+  // Load makeup gain setting
+  current_makeup_gain = static_cast<TremDelMakeUpGain>(LocalSettings.makeupGainMode);
+
+  // Validate makeup gain value
+  if (current_makeup_gain < TV_MAKEUP_GAIN_NONE ||
+      current_makeup_gain > TV_MAKEUP_GAIN_HEAVY) {
+    current_makeup_gain = TV_MAKEUP_GAIN_NORMAL;
+  }
+
   verb.setPreDelay(platePreDelay);
   verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
   verb.setDecay(plateDecay);
@@ -305,6 +372,7 @@ void save_mono_stereo_settings() {
   Settings &LocalSettings = SavedSettings.GetSettings();
 
   LocalSettings.monoStereoMode = mono_stereo_mode;
+  LocalSettings.makeupGainMode = current_makeup_gain;  // NEW: Save makeup gain
 
   trigger_settings_save = true;
 }
@@ -338,10 +406,32 @@ void restore_mono_stereo_settings() {
   Settings &LocalSettings = SavedSettings.GetSettings();
 
   mono_stereo_mode = static_cast<MonoStereoMode>(LocalSettings.monoStereoMode);
+  current_makeup_gain = static_cast<TremDelMakeUpGain>(LocalSettings.makeupGainMode);  // NEW: Restore makeup gain
   update_reverb_scales(mono_stereo_mode);
 }
 
+// Forward declarations for tap tempo functions
+void enter_tap_tempo_mode();
+void exit_tap_tempo_mode();
+void handle_tap_tempo_tap();
+void check_tap_tempo_timeout();
+void check_dfu_mode_both_switches();
+
 void handle_normal_press(Hothouse::Switches footswitch) {
+  // Handle tap tempo mode
+  if (pedal_mode == PEDAL_MODE_TAP_TEMPO) {
+    if (footswitch == Hothouse::FOOTSWITCH_1) {
+      // Exit tap tempo mode
+      exit_tap_tempo_mode();
+      return;
+    } else if (footswitch == Hothouse::FOOTSWITCH_2) {
+      // Tap the tempo
+      handle_tap_tempo_tap();
+      return;
+    }
+  }
+
+  // Handle edit reverb mode
   if (pedal_mode == PEDAL_MODE_EDIT_REVERB) {
     // Only save the settings if the RIGHT footswitch is pressed in edit mode.
     // The LEFT footswitch is used to exit edit mode without saving.
@@ -352,7 +442,11 @@ void handle_normal_press(Hothouse::Switches footswitch) {
       restore_reverb_settings();
     }
     pedal_mode = PEDAL_MODE_NORMAL;
-  } else if (pedal_mode == PEDAL_MODE_EDIT_MONO_STEREO) {
+    return;
+  }
+
+  // Handle mono-stereo edit mode
+  if (pedal_mode == PEDAL_MODE_EDIT_MONO_STEREO) {
     // Only save the settings if the RIGHT footswitch is pressed in mono-stereo
     // edit mode. The LEFT footswitch is used to exit mono-stereo edit mode
     // without saving.
@@ -363,24 +457,26 @@ void handle_normal_press(Hothouse::Switches footswitch) {
       restore_mono_stereo_settings();
     }
     pedal_mode = PEDAL_MODE_NORMAL;
-  } else {
-    if (footswitch == Hothouse::FOOTSWITCH_1) {
-      bypass_verb = !bypass_verb;
+    return;
+  }
 
-      if (bypass_verb) {
-        // Clear the reverb tails when the reverb is bypassed so if you
-        // turn it back on, it starts fresh and doesn't sound weird.
-        verb.clear();
-      }
-    } else {
-      bypass_delay = !bypass_delay;
+  // Normal mode bypass toggles
+  if (footswitch == Hothouse::FOOTSWITCH_1) {
+    bypass_verb = !bypass_verb;
+
+    if (bypass_verb) {
+      // Clear the reverb tails when the reverb is bypassed so if you
+      // turn it back on, it starts fresh and doesn't sound weird.
+      verb.clear();
     }
+  } else {
+    bypass_delay = !bypass_delay;
   }
 }
 
 void handle_double_press(Hothouse::Switches footswitch) {
   // Ignore double presses in edit modes
-  if (pedal_mode == PEDAL_MODE_EDIT_REVERB || pedal_mode == PEDAL_MODE_EDIT_MONO_STEREO) {
+  if (pedal_mode != PEDAL_MODE_NORMAL) {
     return;
   }
 
@@ -389,24 +485,119 @@ void handle_double_press(Hothouse::Switches footswitch) {
   handle_normal_press(footswitch);
 
   if (footswitch == Hothouse::FOOTSWITCH_1) {
-    // Go into reverb edit mode
-    bypass_verb = false; // Make sure that reverb is ON
-    pedal_mode = PEDAL_MODE_EDIT_REVERB;
+    // CHANGED: Enter tap tempo mode (was: enter reverb edit mode)
+    enter_tap_tempo_mode();
   } else if (footswitch == Hothouse::FOOTSWITCH_2) {
-    // Toggle the trem bypass
+    // UNCHANGED: Toggle tremolo bypass
     bypass_trem = !bypass_trem;
   }
 }
 
 void handle_long_press(Hothouse::Switches footswitch) {
-  if (footswitch == Hothouse::FOOTSWITCH_2) {
-    // If the right footswitch is long-pressed, enter mono-stereo config.
+  if (footswitch == Hothouse::FOOTSWITCH_1) {
+    // Long-press on left footswitch: Enter reverb edit mode
+    bypass_verb = false;  // Make sure reverb is ON
+    pedal_mode = PEDAL_MODE_EDIT_REVERB;
+  } else if (footswitch == Hothouse::FOOTSWITCH_2) {
+    // Long-press on right footswitch: Enter mono-stereo config
 
     // Turn on reverb and turn off the other effects
     bypass_verb = false;
     bypass_delay = true;
     bypass_trem = true;
     pedal_mode = PEDAL_MODE_EDIT_MONO_STEREO;
+  }
+}
+
+void enter_tap_tempo_mode() {
+  pedal_mode = PEDAL_MODE_TAP_TEMPO;
+  tap_tempo_active = true;
+  tap_tempo_last_tap_time = System::GetNow();
+  // Don't clear existing tap tempo data - allow refinement
+}
+
+void exit_tap_tempo_mode() {
+  pedal_mode = PEDAL_MODE_NORMAL;
+  tap_tempo_active = false;
+}
+
+void handle_tap_tempo_tap() {
+  uint32_t current_time = System::GetNow();
+
+  // Calculate interval from last tap
+  if (tap_tempo_last_tap_time > 0) {
+    uint32_t interval = current_time - tap_tempo_last_tap_time;
+
+    // Validate interval is in reasonable range
+    if (interval >= TAP_TEMPO_MIN_INTERVAL_MS &&
+        interval <= TAP_TEMPO_MAX_INTERVAL_MS) {
+
+      tap_tempo_interval_ms = interval;
+
+      // Convert to samples at 48kHz
+      tap_tempo_delay_samples = (interval / 1000.0f) * 48000.0f;
+
+      // Clamp to valid delay range
+      tap_tempo_delay_samples = daisysp::fclamp(tap_tempo_delay_samples,
+                                                 TAP_TEMPO_SAMPLES_MIN,
+                                                 TAP_TEMPO_SAMPLES_MAX);
+
+      // Enable tap tempo control
+      tap_tempo_controls_delay = true;
+      master_delay_time_samples = tap_tempo_delay_samples;
+    }
+  }
+
+  tap_tempo_last_tap_time = current_time;
+}
+
+void check_tap_tempo_timeout() {
+  if (pedal_mode == PEDAL_MODE_TAP_TEMPO) {
+    uint32_t current_time = System::GetNow();
+
+    // Exit if no activity for 5 seconds
+    if ((current_time - tap_tempo_last_tap_time) >= TAP_TEMPO_TIMEOUT_MS) {
+      exit_tap_tempo_mode();
+    }
+  }
+}
+
+void check_dfu_mode_both_switches() {
+  // Check if both footswitches are currently pressed
+  bool fs1_pressed = hw.switches[Hothouse::FOOTSWITCH_1].Pressed();
+  bool fs2_pressed = hw.switches[Hothouse::FOOTSWITCH_2].Pressed();
+
+  if (fs1_pressed && fs2_pressed) {
+    if (!both_switches_pressed) {
+      // Just started pressing both
+      both_switches_press_start_time = System::GetNow();
+      both_switches_pressed = true;
+    } else {
+      // Check how long both have been held
+      uint32_t hold_duration = System::GetNow() - both_switches_press_start_time;
+
+      if (hold_duration >= DFU_BOTH_SWITCHES_HOLD_TIME_MS) {
+        // Enter DFU mode - flash LEDs to indicate
+        for (int i = 0; i < 5; i++) {
+          led_left.Set(1.0f);
+          led_right.Set(0.0f);
+          led_left.Update();
+          led_right.Update();
+          System::Delay(100);
+
+          led_left.Set(0.0f);
+          led_right.Set(1.0f);
+          led_left.Update();
+          led_right.Update();
+          System::Delay(100);
+        }
+
+        System::ResetToBootloader();
+      }
+    }
+  } else {
+    // Reset tracking
+    both_switches_pressed = false;
   }
 }
 
@@ -452,6 +643,26 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       led_left.Set(led_state ? 1.0f : 0.0f);
       led_right.Set(led_state ? 0.0f : 1.0f);
     }
+  } else if (pedal_mode == PEDAL_MODE_TAP_TEMPO) {
+    // Tap tempo mode
+    // LED_1: Solid on to indicate tap tempo mode
+    led_left.Set(1.0f);
+
+    // LED_2: Blink at current tempo (if tempo set)
+    if (tap_tempo_interval_ms > 0) {
+      uint32_t blink_phase = System::GetNow() % tap_tempo_interval_ms;
+      float blink_threshold = tap_tempo_interval_ms * 0.1f;  // 10% duty cycle
+
+      if (blink_phase < blink_threshold) {
+        led_right.Set(1.0f);
+      } else {
+        led_right.Set(0.1f);  // Dim when off
+      }
+    } else {
+      // No tempo set yet - slow pulse
+      uint32_t slow_pulse = System::GetNow() % 1000;
+      led_right.Set(slow_pulse < 500 ? 1.0f : 0.1f);
+    }
   } else {
     // Normal mode
     led_left.Set(bypass_verb ? 0.0f : 1.0f);
@@ -474,8 +685,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
 
   plateWet = p_verb_amt.Process();
 
-  TremDelMakeUpGain makeup_gain = kMakeupGainMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
-
   if (pedal_mode == PEDAL_MODE_NORMAL) {
     osc.SetFreq(p_trem_speed.Process());
     static float depth = 0;
@@ -484,12 +693,70 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     osc.SetAmp(depth);
     dc_os = 1.f - depth;
 
-    osc.SetWaveform(kWaveformMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)]);
+    // Get tremolo mode from SWITCH_2
+    TremoloMode trem_mode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+
+    // Set oscillator waveform based on mode (not used for harmonic)
+    if (trem_mode == TREMOLO_SQUARE) {
+      osc.SetWaveform(FlickOscillator::WAVE_SQUARE_ROUNDED);
+    } else if (trem_mode == TREMOLO_SINE) {
+      osc.SetWaveform(FlickOscillator::WAVE_SIN);
+    }
+    // For harmonic mode, waveform doesn't matter much (use sine)
 
     //
-    // Delay
+    // Delay with subdivision and tap tempo support
     //
-    delayL.delayTarget = delayR.delayTarget =  p_delay_time.Process();
+
+    // Get delay subdivision from SWITCH_3
+    DelaySubdivision subdivision = kDelaySubdivisionMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
+
+    // Calculate subdivision multiplier
+    float subdivision_multiplier = 1.0f;
+    switch (subdivision) {
+      case DELAY_SUBDIV_DOTTED_EIGHTH:
+        subdivision_multiplier = 1.5f;
+        break;
+      case DELAY_SUBDIV_QUARTER_TRIPLET:
+        subdivision_multiplier = 1.333333f;  // 4/3
+        break;
+      case DELAY_SUBDIV_NORMAL:
+      default:
+        subdivision_multiplier = 1.0f;
+        break;
+    }
+
+    // Determine master delay time source
+    float current_knob4_value = hw.knobs[Hothouse::KNOB_4].Value();
+
+    if (tap_tempo_controls_delay) {
+      // Check for knob takeover (5% movement)
+      if (fabs(current_knob4_value - knob4_last_value) > KNOB_TAKEOVER_THRESHOLD) {
+        // Knob has moved - take back control from tap tempo
+        tap_tempo_controls_delay = false;
+        master_delay_time_samples = p_delay_time.Process();
+      } else {
+        // Tap tempo still controls
+        master_delay_time_samples = tap_tempo_delay_samples;
+      }
+    } else {
+      // Normal knob control
+      master_delay_time_samples = p_delay_time.Process();
+    }
+
+    knob4_last_value = current_knob4_value;
+
+    // Apply subdivision to master time
+    float final_delay_time = master_delay_time_samples * subdivision_multiplier;
+
+    // Clamp to valid range (important for subdivisions that could exceed MAX_DELAY)
+    final_delay_time = daisysp::fclamp(final_delay_time, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
+
+    // Set delay targets
+    delayL.delayTarget = final_delay_time;
+    delayR.delayTarget = final_delay_time;
+
+    // Feedback unchanged
     delayL.feedback = delayR.feedback = p_delay_feedback.Process();
     delay_drywet = (int)p_delay_amt.Process();
 
@@ -541,8 +808,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     verb.setPreDelay(platePreDelay);    
   } else if (pedal_mode == PEDAL_MODE_EDIT_MONO_STEREO) {
     // Mono-Stereo edit mode
-    // Read in the mono-stereo mode from toggle switch 3
-    mono_stereo_mode = static_cast<MonoStereoMode>(hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3));
+    // SWITCH_3: Read mono-stereo mode
     switch (hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)) {
       case Hothouse::TOGGLESWITCH_MIDDLE:
         mono_stereo_mode = MS_MODE_MISO; // Mono In, Stereo Out
@@ -554,6 +820,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         mono_stereo_mode = MS_MODE_MIMO; // Mono In, Mono Out
     }
     update_reverb_scales(mono_stereo_mode);
+
+    // SWITCH_2: Read makeup gain setting (NEW)
+    current_makeup_gain = kMakeupGainMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
   }
 
   for (size_t i = 0; i < size; ++i) {
@@ -569,6 +838,26 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       s_R = dry_R;
     }
 
+    // Get makeup gain values (now from global variable)
+    float trem_makeup_gain = 1.0f;
+    float delay_makeup_gain = 1.0f;
+
+    switch (current_makeup_gain) {
+      case TV_MAKEUP_GAIN_HEAVY:
+        trem_makeup_gain = 1.6f;   // +4dB for tremolo
+        delay_makeup_gain = 2.0f;  // +6dB for delay
+        break;
+      case TV_MAKEUP_GAIN_NORMAL:
+        trem_makeup_gain = 1.2f;   // +1.6dB for tremolo
+        delay_makeup_gain = 1.66f; // +4.4dB for delay
+        break;
+      case TV_MAKEUP_GAIN_NONE:
+      default:
+        trem_makeup_gain = 1.0f;
+        delay_makeup_gain = 1.0f;
+        break;
+    }
+
     if (!bypass_delay) {
       float mixL = 0;
       float mixR = 0;
@@ -580,20 +869,53 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       mixL += sigL;
       mixR += sigR;
 
-      float delay_make_up_gain = makeup_gain == TV_MAKEUP_GAIN_NONE ? 1.0f : makeup_gain == TV_MAKEUP_GAIN_NORMAL ? 1.66f : 2.0f;
-
       // apply drywet and attenuate
-      s_L = fdrywet * mixL * 0.333f + (1.0f - fdrywet) * s_L * delay_make_up_gain;
-      s_R = fdrywet * mixR * 0.333f + (1.0f - fdrywet) * s_R * delay_make_up_gain;
+      s_L = fdrywet * mixL * 0.333f + (1.0f - fdrywet) * s_L * delay_makeup_gain;
+      s_R = fdrywet * mixR * 0.333f + (1.0f - fdrywet) * s_R * delay_makeup_gain;
     }
 
     if (!bypass_trem) {
-      // trem_val gets used above for pulsing LED
-      trem_val = dc_os + osc.Process();
-      float trem_make_up_gain = makeup_gain == TV_MAKEUP_GAIN_NONE ? 1.0f : makeup_gain == TV_MAKEUP_GAIN_NORMAL ? 1.2f : 1.6f;
+      // Get tremolo mode from SWITCH_2 (in normal mode)
+      TremoloMode trem_mode = TREMOLO_SINE;  // Default
+      if (pedal_mode == PEDAL_MODE_NORMAL) {
+        trem_mode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+      }
 
-      s_L = s_L * trem_val * trem_make_up_gain;
-      s_R = s_R * trem_val * trem_make_up_gain;
+      // Generate LFO sample
+      float lfo_sample = osc.Process();
+
+      // Apply tremolo based on mode
+      if (trem_mode == TREMOLO_HARMONIC) {
+        // === HARMONIC TREMOLO ===
+
+        // Process left channel
+        harmonic_filter_L.Process(s_L);
+        float low_L = harmonic_filter_L.Low();
+        float high_L = harmonic_filter_L.High();
+
+        // Apply tremolo with opposite phase to each band
+        float low_mod_L = low_L * (1.0f + lfo_sample);
+        float high_mod_L = high_L * (1.0f - lfo_sample);  // Inverted phase
+        s_L = (low_mod_L + high_mod_L) * trem_makeup_gain;
+
+        // Process right channel
+        harmonic_filter_R.Process(s_R);
+        float low_R = harmonic_filter_R.Low();
+        float high_R = harmonic_filter_R.High();
+
+        float low_mod_R = low_R * (1.0f + lfo_sample);
+        float high_mod_R = high_R * (1.0f - lfo_sample);
+        s_R = (low_mod_R + high_mod_R) * trem_makeup_gain;
+
+      } else {
+        // === STANDARD TREMOLO (Square or Sine) ===
+
+        // DC offset to make LFO unipolar (0 to peak)
+        trem_val = dc_os + lfo_sample;
+
+        s_L *= trem_val * trem_makeup_gain;
+        s_R *= trem_val * trem_makeup_gain;
+      }
     }
 
     // Keep sending input to the reverb even if bypassed so that when it's
@@ -664,6 +986,14 @@ int main() {
 
   osc.Init(hw.AudioSampleRate());
 
+  // Initialize harmonic tremolo filters (state variable filters for crossover)
+  harmonic_filter_L.Init(hw.AudioSampleRate());
+  harmonic_filter_R.Init(hw.AudioSampleRate());
+  harmonic_filter_L.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
+  harmonic_filter_R.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
+  harmonic_filter_L.SetRes(0.5f);  // Minimal resonance for flat response
+  harmonic_filter_R.SetRes(0.5f);
+
   //
   // Dattorro Reverb Initialization
   //
@@ -692,7 +1022,9 @@ int main() {
     plateTankModSpeed,
     plateTankModDepth,
     plateTankModShape,
-    platePreDelay
+    platePreDelay,
+    MS_MODE_MIMO,               // monoStereoMode
+    TV_MAKEUP_GAIN_NORMAL       // makeupGainMode (NEW)
   };
   SavedSettings.Init(defaultSettings);
 
@@ -714,6 +1046,12 @@ int main() {
   }
   
   while (true) {
+    // Check for tap tempo timeout
+    check_tap_tempo_timeout();
+
+    // Check for DFU mode (both switches held)
+    check_dfu_mode_both_switches();
+
     if(trigger_settings_save) {
 			SavedSettings.Save(); // Writing locally stored settings to the external flash
 			trigger_settings_save = false;
@@ -765,11 +1103,6 @@ int main() {
       }
     }
     hw.DelayMs(10);
-
-    // Call System::ResetToBootloader() if FOOTSWITCH_1 is pressed for 2 seconds
-    if (pedal_mode == PEDAL_MODE_NORMAL) {
-      hw.CheckResetToBootloader();
-    }
   }
   return 0;
 }

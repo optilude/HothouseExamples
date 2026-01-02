@@ -47,7 +47,7 @@ Output (L/R)
 
 ```
 Flick/
-├── flick.cpp                          # Main application (775 lines)
+├── flick.cpp                          # Main application (~1100 lines)
 ├── flick_oscillator.h/.cpp            # Tremolo waveform generator
 ├── PlateauNEVersio/                   # Dattorro reverb implementation
 │   ├── Dattorro.hpp/.cpp              # High-level reverb interface
@@ -60,7 +60,9 @@ Flick/
 │       └── modulation/                # Modulation sources
 │           └── LFO.hpp                # Triangle/Sawtooth LFO
 ├── Makefile                           # Build configuration
-└── README.md                          # User documentation
+├── README.md                          # User documentation
+├── CLAUDE.md                          # Developer/AI documentation (this file)
+└── IMPLEMENTATION_PLAN.md            # Tap tempo & harmonic tremolo implementation plan
 ```
 
 ## Code Organization
@@ -91,26 +93,57 @@ Flick/
 - Sets trigger flag for main loop to execute save
 - Non-blocking to avoid audio glitches
 
-**[handle_normal_press()](flick.cpp:344-379)** - Footswitch bypass control
+**[handle_normal_press()](flick.cpp:420-457)** - Footswitch bypass control
+- Handles tap tempo taps when in tap tempo mode
 - Toggles effect bypass states
 - Saves/cancels edit mode changes
 
-**[handle_double_press()](flick.cpp:381-399)** - Enter edit modes
-- Left footswitch: Reverb edit mode
+**[handle_double_press()](flick.cpp:459-476)** - Enter special modes
+- Left footswitch: Enter tap tempo mode
 - Right footswitch: Toggle tremolo
 
-**[handle_long_press()](flick.cpp:401-411)** - Advanced features
+**[handle_long_press()](flick.cpp:478-492)** - Advanced features
+- Left footswitch long press: Reverb edit mode
 - Right footswitch long press: Mono/Stereo configuration mode
+
+**[enter_tap_tempo_mode()](flick.cpp:475-480)** - Enter tap tempo
+- Activates tap tempo mode
+- Preserves existing tempo data for refinement
+
+**[handle_tap_tempo_tap()](flick.cpp:487-515)** - Process tempo taps
+- Calculates delay time from tap intervals
+- Validates tempo range (50ms - 4 seconds)
+- Updates master delay time
+
+**[check_tap_tempo_timeout()](flick.cpp:517-526)** - Auto-exit tap tempo
+- Exits tap tempo mode after 5 seconds of inactivity
+
+**[check_dfu_mode_both_switches()](flick.cpp:528-565)** - DFU bootloader entry
+- Detects both footswitches held for 5+ seconds
+- Flashes LEDs alternately as visual feedback
+- Calls System::ResetToBootloader()
 
 #### Pedal Modes
 
 **PEDAL_MODE_NORMAL** (line 46)
 - Standard performance mode
 - All knobs control their labeled functions
-- Toggle switches control reverb mode, tremolo waveform, makeup gain
+- SWITCH_1: Reverb knob mode (dry/wet/mix)
+- SWITCH_2: Tremolo mode (Square/Sine/**Harmonic**)
+- SWITCH_3: Delay subdivision (Dotted 8th/Normal/Quarter triplet)
+
+**PEDAL_MODE_TAP_TEMPO** (line 49)
+- Activated by double-pressing left footswitch
+- LED_1: Solid on
+- LED_2: Blinks at current tempo (or slow pulse if no tempo set)
+- FOOTSWITCH_1: Exit tap tempo mode
+- FOOTSWITCH_2: Tap to set tempo
+- Tempo range: 50ms - 4 seconds (15-1200 BPM)
+- Auto-exits after 5 seconds of no taps
+- Knob takeover: Moving KNOB_4 >5% returns control to knob
 
 **PEDAL_MODE_EDIT_REVERB** (line 47)
-- Activated by double-pressing left footswitch
+- Activated by long-pressing left footswitch
 - LEDs flash synchronously (both on/off together)
 - Knobs control advanced reverb parameters:
   - KNOB_1: Reverb wet amount (not saved)
@@ -129,14 +162,12 @@ Flick/
 **PEDAL_MODE_EDIT_MONO_STEREO** (line 48)
 - Activated by long-pressing right footswitch
 - LEDs flash alternately (left/right pattern)
-- SWITCH_3 controls mono/stereo mode:
-  - DOWN: MIMO (Mono In, Mono Out)
-  - MIDDLE: MISO (Mono In, Stereo Out)
-  - UP: SISO (Stereo In, Stereo Out)
+- SWITCH_2: Makeup gain (Heavy/Normal/None) - **NEW**
+- SWITCH_3: Mono/stereo mode (MIMO/MISO/SISO)
 - Left footswitch: Cancel and exit
-- Right footswitch: Save and exit
+- Right footswitch: Save and exit (saves makeup gain + mono/stereo mode)
 
-### Settings Structure: [Settings](flick.cpp:58-86)
+### Settings Structure: [Settings](flick.cpp:81-111)
 
 Persistent parameters stored in QSPI flash:
 ```cpp
@@ -151,10 +182,11 @@ struct Settings {
     float tankModShape;        // LFO shape (0.1-0.5)
     float preDelay;            // Pre-delay time (0-0.25)
     int monoStereoMode;        // MS_MODE_MIMO/MISO/SISO
+    int makeupGainMode;        // TV_MAKEUP_GAIN_NONE/NORMAL/HEAVY (NEW)
 };
 ```
 
-**Version Control**: When `SETTINGS_VERSION` (line 39) is incremented, saved settings are invalidated and defaults are restored on next boot.
+**Version Control**: When `SETTINGS_VERSION` (line 39) is incremented, saved settings are invalidated and defaults are restored on next boot. Current version is **2**.
 
 ### Oscillator: [flick_oscillator.h](flick_oscillator.h) / [flick_oscillator.cpp](flick_oscillator.cpp)
 
@@ -244,14 +276,15 @@ struct Delay {
 | **KNOB_1** | Reverb Dry/Wet | 0-100% | Behavior depends on SWITCH_1 |
 | **KNOB_2** | Tremolo Speed | 0.2-16 Hz | Logarithmic curve |
 | **KNOB_3** | Tremolo Depth | 0-100% | Linear |
-| **KNOB_4** | Delay Time | 50ms-4sec | Logarithmic curve |
+| **KNOB_4** | Delay Time (Master Tempo) | 50ms-4sec | Logarithmic curve; overridden by tap tempo |
 | **KNOB_5** | Delay Feedback | 0-100% | Linear |
 | **KNOB_6** | Delay Mix | 0-100% | Linear |
 | **SWITCH_1** | Reverb Knob Mode | 3-position | UP=Wet Only, MID=Mix, DOWN=Dry Only |
-| **SWITCH_2** | Tremolo Waveform | 3-position | UP=Square, MID=Triangle, DOWN=Sine |
-| **SWITCH_3** | Makeup Gain | 3-position | UP=Heavy (+6dB), MID=Normal (+2-4dB), DOWN=None |
-| **FOOTSWITCH_1** | Reverb Bypass | Momentary | Double-press for edit mode |
-| **FOOTSWITCH_2** | Delay Bypass | Momentary | Double-press for tremolo toggle |
+| **SWITCH_2** | Tremolo Mode | 3-position | UP=Square, MID=Sine, DOWN=**Harmonic** |
+| **SWITCH_3** | Delay Subdivision | 3-position | UP=Dotted 8th (1.5x), MID=Normal (1:1), DOWN=Quarter triplet (1.333x) |
+| **FOOTSWITCH_1** | Reverb Bypass | Momentary | Press=bypass, Double=tap tempo, Long=reverb edit |
+| **FOOTSWITCH_2** | Delay Bypass | Momentary | Press=bypass, Double=tremolo toggle, Long=mono-stereo edit |
+| **BOTH FOOTSWITCHES** | DFU Mode | Hold 5+ sec | Enters USB bootloader for firmware updates |
 
 ### Parameter Scaling
 
@@ -294,9 +327,92 @@ Controlled by SWITCH_1 in normal mode ([lines 497-507](flick.cpp:497-507)):
 - Knob_1 controls wet from 0-100%
 - Pure reverb output
 
-### Makeup Gain
+### Tap Tempo ([lines 487-540](flick.cpp:487-540))
 
-Applied to delay and tremolo to compensate for perceived volume loss ([lines 477, 583, 593](flick.cpp:477)):
+**Entry**: Double-press FOOTSWITCH_1 in normal mode
+
+**Operation**:
+- Each tap of FOOTSWITCH_2 calculates interval from previous tap
+- Interval converted to samples: `(interval_ms / 1000.0f) * 48000.0f`
+- Valid range: 50ms - 4 seconds (TAP_TEMPO_SAMPLES_MIN/MAX)
+- Sets `master_delay_time_samples` which is then multiplied by subdivision
+
+**Knob Takeover**:
+```cpp
+float current_knob4_value = hw.knobs[Hothouse::KNOB_4].Value();
+if (tap_tempo_controls_delay) {
+  if (fabs(current_knob4_value - knob4_last_value) > KNOB_TAKEOVER_THRESHOLD) {
+    tap_tempo_controls_delay = false;  // Knob takes back control
+  }
+}
+```
+- Threshold: 5% movement (KNOB_TAKEOVER_THRESHOLD = 0.05f)
+
+**Auto-Exit**: 5 seconds of inactivity (TAP_TEMPO_TIMEOUT_MS)
+
+**LED Indication**:
+- LED_1: Solid on
+- LED_2: Blinks at tempo (10% duty cycle) or slow pulse if no tempo set
+
+### Delay Subdivisions ([lines 693-746](flick.cpp:693-746))
+
+**Multipliers**:
+```cpp
+DelaySubdivision subdivision = kDelaySubdivisionMap[TOGGLESWITCH_3];
+switch (subdivision) {
+  case DELAY_SUBDIV_DOTTED_EIGHTH:
+    subdivision_multiplier = 1.5f;      // UP position
+    break;
+  case DELAY_SUBDIV_QUARTER_TRIPLET:
+    subdivision_multiplier = 1.333333f; // DOWN position
+    break;
+  case DELAY_SUBDIV_NORMAL:
+  default:
+    subdivision_multiplier = 1.0f;      // MIDDLE position
+    break;
+}
+```
+
+**Application**:
+```cpp
+float final_delay_time = master_delay_time_samples * subdivision_multiplier;
+final_delay_time = daisysp::fclamp(final_delay_time, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
+delayL.delayTarget = final_delay_time;
+delayR.delayTarget = final_delay_time;
+```
+
+Subdivisions apply to both knob-controlled and tap tempo delay times.
+
+### Harmonic Tremolo ([lines 870-901](flick.cpp:870-901))
+
+**Concept**: Splits audio into high and low frequency bands, applies tremolo with opposite phase to each band.
+
+**Implementation**:
+```cpp
+if (trem_mode == TREMOLO_HARMONIC) {
+  // Process through state variable filter
+  harmonic_filter_L.Process(s_L);
+  float low_L = harmonic_filter_L.Low();
+  float high_L = harmonic_filter_L.High();
+
+  // Apply tremolo with opposite phase
+  float low_mod_L = low_L * (1.0f + lfo_sample);
+  float high_mod_L = high_L * (1.0f - lfo_sample);  // Inverted
+  s_L = (low_mod_L + high_mod_L) * trem_makeup_gain;
+}
+```
+
+**Parameters**:
+- Crossover frequency: 800 Hz (HARMONIC_TREMOLO_CROSSOVER_FREQ)
+- Filter type: State Variable Filter (Svf) from DaisySP
+- Filter resonance: 0.5 (minimal resonance for flat response)
+- Initialized at [lines 982-988](flick.cpp:982-988)
+
+**Effect**: Creates swirling, phase-like modulation similar to vintage Fender Vibrato.
+
+### Makeup Gain ([lines 823-841](flick.cpp:823-841))
+
+Applied to delay and tremolo to compensate for perceived volume loss. Now controlled by `current_makeup_gain` global variable (set in mono-stereo edit mode, persisted to flash).
 
 **Delay Makeup Gain**:
 - TV_MAKEUP_GAIN_NONE: 1.0x (0dB)
@@ -307,6 +423,8 @@ Applied to delay and tremolo to compensate for perceived volume loss ([lines 477
 - TV_MAKEUP_GAIN_NONE: 1.0x (0dB)
 - TV_MAKEUP_GAIN_NORMAL: 1.2x (+1.6dB)
 - TV_MAKEUP_GAIN_HEAVY: 1.6x (+4dB)
+
+**Note**: Makeup gain setting moved from SWITCH_3 (normal mode) to SWITCH_2 (mono-stereo edit mode) and is now **persisted across restarts**.
 
 ## Mono/Stereo Signal Routing
 
@@ -332,16 +450,19 @@ Three modes controlled by `mono_stereo_mode` enum ([lines 51-55](flick.cpp:51-55
 
 ## LED Indicators
 
-**LED_1 (Left LED)** ([line 457](flick.cpp:457)):
+**LED_1 (Left LED)** ([line 650](flick.cpp:650)):
 - Normal mode: ON when reverb active, OFF when bypassed
+- Tap tempo mode: Solid ON
 - Edit reverb mode: Flashes synchronously with right LED
 - Edit mono/stereo mode: Flashes alternately with right LED
 - Factory reset mode: Flashes alternately, faster with each stage
+- DFU mode entry: Flashes alternately with LED_2 (5 cycles)
 
-**LED_2 (Right LED)** ([line 468](flick.cpp:468)):
-- Delay only: 100% brightness
-- Tremolo only: 40% pulsing at tremolo rate
-- Both: 100% pulsing at tremolo rate
+**LED_2 (Right LED)** ([line 661](flick.cpp:661)):
+- Normal mode with delay only: 100% brightness
+- Normal mode with tremolo only: 40% pulsing at tremolo rate
+- Normal mode with both: 100% pulsing at tremolo rate
+- Tap tempo mode: Blinks at current tempo (10% duty cycle) or slow pulse if no tempo set
 - Edit modes: Same as LED_1
 
 ## Build System
@@ -575,11 +696,23 @@ These are global variables defined in `InterpDelay.cpp`.
 
 The Hothouse hardware library handles:
 - Debouncing
-- Double-press detection (within ~300ms window)
+- Double-press detection (within ~600ms window)
 - Long-press detection (>1 second)
-- Press-and-hold for bootloader entry (2 seconds)
 
-Callbacks are registered at [lines 701-706](flick.cpp:701-706).
+Callbacks are registered at [lines 1018-1022](flick.cpp:1018-1022).
+
+### DFU Mode (Bootloader Entry)
+
+**Old behavior** (single footswitch): Hothouse HAL provided `CheckResetToBootloader()` which monitored FOOTSWITCH_1 for 2-second hold.
+
+**New behavior** (both footswitches): Custom implementation `check_dfu_mode_both_switches()` [lines 528-565](flick.cpp:528-565):
+- Monitors both FOOTSWITCH_1 and FOOTSWITCH_2
+- Requires **5 seconds** of simultaneous pressing
+- Flashes LEDs alternately (5 cycles) as visual feedback
+- Calls `System::ResetToBootloader()` to enter USB bootloader
+- Called from main loop at [line 1046](flick.cpp:1046)
+
+This change frees up FOOTSWITCH_1 long-press for reverb edit mode and makes DFU entry more intentional.
 
 ### Non-Blocking Settings Save
 
@@ -597,13 +730,19 @@ This prevents audio glitches from blocking flash writes in the audio callback.
 
 | Constant | Value | Location | Purpose |
 |----------|-------|----------|---------|
-| SETTINGS_VERSION | 1 | [line 39](flick.cpp:39) | Forces reset on structure change |
+| SETTINGS_VERSION | **2** | [line 39](flick.cpp:39) | Forces reset on structure change |
 | MAX_DELAY | 96000 samples | [line 43](flick.cpp:43) | 4 seconds at 48kHz |
-| minus18dBGain | 0.12589254 | [line 206](flick.cpp:206) | Input attenuation for reverb |
-| minus20dBGain | 0.1 | [line 207](flick.cpp:207) | Additional input attenuation |
-| Tremolo Speed | 0.2-16 Hz | [line 653](flick.cpp:653) | LFO frequency range |
-| Delay Time | 0.05-4 sec | [line 656](flick.cpp:656) | Delay range |
-| Pre-Delay | 0-0.25 sec | [line 511](flick.cpp:511) | Reverb pre-delay |
+| TAP_TEMPO_MIN_INTERVAL_MS | 50 ms | [line 72](flick.cpp:72) | Min tap interval (1200 BPM) |
+| TAP_TEMPO_MAX_INTERVAL_MS | 4000 ms | [line 73](flick.cpp:73) | Max tap interval (15 BPM) |
+| TAP_TEMPO_TIMEOUT_MS | 5000 ms | [line 71](flick.cpp:71) | Auto-exit tap tempo |
+| DFU_BOTH_SWITCHES_HOLD_TIME_MS | 5000 ms | [line 78](flick.cpp:78) | Both switches for DFU |
+| KNOB_TAKEOVER_THRESHOLD | 0.05 (5%) | [line 209](flick.cpp:209) | Knob movement to exit tap tempo |
+| HARMONIC_TREMOLO_CROSSOVER_FREQ | 800 Hz | [line 225](flick.cpp:225) | Harmonic tremolo filter cutoff |
+| minus18dBGain | 0.12589254 | [line 240](flick.cpp:240) | Input attenuation for reverb |
+| minus20dBGain | 0.1 | [line 241](flick.cpp:241) | Additional input attenuation |
+| Tremolo Speed | 0.2-16 Hz | [line 959](flick.cpp:959) | LFO frequency range |
+| Delay Time | 0.05-4 sec | [line 971](flick.cpp:971) | Delay range |
+| Subdivision Multipliers | 1.0x, 1.333x, 1.5x | [lines 697-708](flick.cpp:697-708) | Normal, triplet, dotted 8th |
 
 ## Debugging Tips
 
@@ -669,15 +808,22 @@ If reverb sounds broken, verify:
 
 | Feature | File | Lines |
 |---------|------|-------|
-| Audio callback | [flick.cpp](flick.cpp) | 425-628 |
-| Delay processing | [flick.cpp](flick.cpp) | 572-588 |
-| Tremolo processing | [flick.cpp](flick.cpp) | 590-597 |
-| Reverb processing | [flick.cpp](flick.cpp) | 599-617 |
-| Settings structure | [flick.cpp](flick.cpp) | 58-86 |
-| Normal mode controls | [flick.cpp](flick.cpp) | 479-507 |
-| Edit mode controls | [flick.cpp](flick.cpp) | 508-557 |
-| Footswitch handlers | [flick.cpp](flick.cpp) | 344-411 |
-| Main initialization | [flick.cpp](flick.cpp) | 630-775 |
+| Audio callback | [flick.cpp](flick.cpp) | 598-920 |
+| Tap tempo mode entry | [flick.cpp](flick.cpp) | 475-480 |
+| Tap tempo tap handler | [flick.cpp](flick.cpp) | 487-515 |
+| Tap tempo timeout check | [flick.cpp](flick.cpp) | 517-526 |
+| DFU mode (both switches) | [flick.cpp](flick.cpp) | 528-565 |
+| Delay processing | [flick.cpp](flick.cpp) | 843-857 |
+| Delay subdivision logic | [flick.cpp](flick.cpp) | 693-746 |
+| Tremolo processing (standard) | [flick.cpp](flick.cpp) | 893-900 |
+| Harmonic tremolo processing | [flick.cpp](flick.cpp) | 870-891 |
+| Reverb processing | [flick.cpp](flick.cpp) | 903-917 |
+| Settings structure | [flick.cpp](flick.cpp) | 81-111 |
+| Normal mode controls | [flick.cpp](flick.cpp) | 670-759 |
+| Edit mode controls | [flick.cpp](flick.cpp) | 761-808 |
+| Footswitch handlers | [flick.cpp](flick.cpp) | 420-492 |
+| Main initialization | [flick.cpp](flick.cpp) | 939-1100 |
+| Harmonic filter init | [flick.cpp](flick.cpp) | 982-988 |
 | Oscillator class | [flick_oscillator.h](flick_oscillator.h) | 10-132 |
 | PolyBLEP algorithm | [flick_oscillator.cpp](flick_oscillator.cpp) | 79-90 |
 | Dattorro interface | [Dattorro.hpp](PlateauNEVersio/Dattorro.hpp) | 162-235 |
@@ -685,13 +831,23 @@ If reverb sounds broken, verify:
 ### Control Quick Map (Normal Mode)
 
 ```
-KNOB 1: Reverb Mix    SWITCH 1: Reverb Mode     FOOTSWITCH 1: Reverb On/Off
-KNOB 2: Trem Speed    SWITCH 2: Trem Wave       FOOTSWITCH 2: Delay On/Off
-KNOB 3: Trem Depth    SWITCH 3: Makeup Gain
-KNOB 4: Delay Time
-KNOB 5: Delay Feedback
-KNOB 6: Delay Mix
+KNOB 1: Reverb Mix         SWITCH 1: Reverb Mode         FS1 Press:  Reverb On/Off
+KNOB 2: Trem Speed         SWITCH 2: Trem Mode           FS1 Double: Tap Tempo Mode
+KNOB 3: Trem Depth         SWITCH 3: Delay Subdivision   FS1 Long:   Reverb Edit
+KNOB 4: Delay Time         (UP=Dotted 8th, MID=Normal,   FS2 Press:  Delay On/Off
+KNOB 5: Delay Feedback      DOWN=Quarter Triplet)        FS2 Double: Tremolo On/Off
+KNOB 6: Delay Mix                                        FS2 Long:   Mono-Stereo Edit
+                                                          Both 5s:    DFU Mode
 ```
+
+### New Features (2026-01-02)
+
+- **Tap Tempo**: Double-press FS1, tap FS2 to set delay time (50ms-4s range)
+- **Delay Subdivisions**: Dotted eighth (1.5x), normal (1:1), quarter triplet (1.333x)
+- **Harmonic Tremolo**: Splits signal at 800Hz, modulates high/low bands 180° out of phase
+- **Makeup Gain Persistence**: Now saved to flash, set in mono-stereo edit mode (SWITCH_2)
+- **DFU Mode Update**: Both footswitches held 5+ seconds (was: FS1 long press)
+- **Settings Version**: Incremented to 2 (forces one-time reset on upgrade)
 
 ---
 
