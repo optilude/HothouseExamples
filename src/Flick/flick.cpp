@@ -111,13 +111,13 @@ struct Settings {
 };
 
 //Persistent Storage Declaration. Using type Settings and passed the devices qspi handle
-PersistentStorage<Settings> saved_settings(hw.seed.qspi);
+PersistentStorage<Settings> savedSettings(hw.seed.qspi);
 
 FlickOscillator osc;
 float dc_os = 0;
 
-DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS del_mem_l;
-DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS del_mem_r;
+DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS delMemL;
+DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS delMemR;
 
 Dattorro verb(48000, 16, 4.0);
 PedalMode pedal_mode = PEDAL_MODE_NORMAL;
@@ -183,8 +183,8 @@ constexpr DelaySubdivision K_DELAY_SUBDIVISION_MAP[] = {
   DELAY_SUBDIV_QUARTER_TRIPLET,  // DOWN (1.333x)
 };
 
-Delay delay_l;
-Delay delay_r;
+Delay delayL;
+Delay delayR;
 int delay_drywet;
 
 float reverb_tone;
@@ -205,7 +205,7 @@ float tap_tempo_delay_samples = 0.0f;
 bool tap_tempo_controls_delay = false;  // True when tap tempo overrides knob
 
 // Knob takeover for KNOB_4 (delay time)
-float delay_time_last_value = 0.0f;
+float delayTimeLastValue = 0.0f;
 const float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required
 
 // Master delay time (before subdivision multiplier)
@@ -220,23 +220,23 @@ TremDelMakeUpGain current_makeup_gain = TV_MAKEUP_GAIN_NORMAL;
 
 // Harmonic tremolo state
 using daisysp::Svf;
-Svf harmonic_filter_l;  // State variable filter for crossover
-Svf harmonic_filter_r;
+Svf harmonicFilterL;  // State variable filter for crossover
+Svf harmonicFilterR;
 const float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
 
 // Reverb vars
-bool plate_diffusion_enabled = true;
-float plate_pre_delay = 0.;
+bool plateDiffusionEnabled = true;
+float platePreDelay = 0.;
 
-float plate_delay = 0.0;
+float plateDelay = 0.0;
 
-float plate_dry = 1.0;
-float plate_wet = 0.5;
+float plateDry = 1.0;
+float plateWet = 0.5;
 
-float plate_decay = 0.8;
-float plate_time_scale = 1.007500;
+float plateDecay = 0.8;
+float plateTimeScale = 1.007500;
 
-float plate_tank_diffusion = 0.85;
+float plateTankDiffusion = 0.85;
 
   /**
    * Good Defaults
@@ -251,27 +251,27 @@ float plate_tank_diffusion = 0.85;
    */
 
 // The damping values appear to be want to be between 0 and 10
-float plate_input_damp_low = 2.87; // approx 100Hz
-float plate_input_damp_high = 7.25;
+float plateInputDampLow = 2.87; // approx 100Hz
+float plateInputDampHigh = 7.25;
 
-float plate_tank_damp_low = 2.87; // approx 100Hz
-float plate_tank_damp_high = 7.25;
+float plateTankDampLow = 2.87; // approx 100Hz
+float plateTankDampHigh = 7.25;
 
-float plate_tank_mod_speed = 0.1;
-float plate_tank_mod_depth = 0.1;
-float plate_tank_mod_shape = 0.25;
+float plateTankModSpeed = 0.1;
+float plateTankModDepth = 0.1;
+float plateTankModShape = 0.25;
 
 const float MINUS_18DB_GAIN = 0.12589254;
 const float MINUS_20DB_GAIN = 0.1;
 
-float left_input = 0.;
-float right_input = 0.;
-float left_output = 0.;
-float right_output = 0.;
-float reverb_dry_scale_factor = 1.0;
-float reverb_reverse_scale_factor = 1.0;
+float leftInput = 0.;
+float rightInput = 0.;
+float leftOutput = 0.;
+float rightOutput = 0.;
+float reverbDryScaleFactor = 1.0;
+float reverbReverseScaleFactor = 1.0;
 
-float input_amplification = 1.0; // This isn't really used yet
+float inputAmplification = 1.0; // This isn't really used yet
 
 bool trigger_settings_save = false;
 
@@ -296,13 +296,13 @@ int factory_reset_stage = 0;
 inline void updateReverbScales(MonoStereoMode mode) {
   switch (mode) {
     case MS_MODE_MIMO:
-      reverb_dry_scale_factor = 5.0f; // Make the signal stronger for MIMO mode
-      reverb_reverse_scale_factor = 0.2f;
+      reverbDryScaleFactor = 5.0f; // Make the signal stronger for MIMO mode
+      reverbReverseScaleFactor = 0.2f;
       break;
     case MS_MODE_MISO:
     case MS_MODE_SISO:
-      reverb_dry_scale_factor = 2.5f; // MISO and SISO modes
-      reverb_reverse_scale_factor = 0.4f;
+      reverbDryScaleFactor = 2.5f; // MISO and SISO modes
+      reverbReverseScaleFactor = 0.4f;
       break;
   }
 }
@@ -310,25 +310,25 @@ inline void updateReverbScales(MonoStereoMode mode) {
 void loadSettings() {
 
 	// Reference to local copy of settings stored in flash
-	Settings &localSettings = saved_settings.GetSettings();
+	Settings &localSettings = savedSettings.GetSettings();
 
   int savedVersion = localSettings.version;
 
   if (savedVersion != SETTINGS_VERSION) {
     // Something has changed. Load defaults!
-    saved_settings.RestoreDefaults();
+    savedSettings.RestoreDefaults();
     loadSettings();
     return;
   }
 
-  plate_decay = localSettings.decay;
-  plate_tank_diffusion = localSettings.diffusion;
-  plate_input_damp_high = localSettings.inputCutoffFreq;
-  plate_tank_damp_high = localSettings.tankCutoffFreq;
-  plate_tank_mod_speed = localSettings.tankModSpeed;
-  plate_tank_mod_depth = localSettings.tankModDepth;
-  plate_tank_mod_shape = localSettings.tankModShape;
-  plate_pre_delay = localSettings.preDelay;
+  plateDecay = localSettings.decay;
+  plateTankDiffusion = localSettings.diffusion;
+  plateInputDampHigh = localSettings.inputCutoffFreq;
+  plateTankDampHigh = localSettings.tankCutoffFreq;
+  plateTankModSpeed = localSettings.tankModSpeed;
+  plateTankModDepth = localSettings.tankModDepth;
+  plateTankModShape = localSettings.tankModShape;
+  platePreDelay = localSettings.preDelay;
   mono_stereo_mode = static_cast<MonoStereoMode>(localSettings.monoStereoMode);
   updateReverbScales(mono_stereo_mode);
 
@@ -341,35 +341,35 @@ void loadSettings() {
     current_makeup_gain = TV_MAKEUP_GAIN_NORMAL;
   }
 
-  verb.setPreDelay(plate_pre_delay);
-  verb.setInputFilterHighCutoffPitch(plate_input_damp_high);
-  verb.setDecay(plate_decay);
-  verb.setTankDiffusion(plate_tank_diffusion);
-  verb.setTankFilterHighCutFrequency(plate_tank_damp_high);
-  verb.setTankModSpeed(plate_tank_mod_speed * 8);
-  verb.setTankModDepth(plate_tank_mod_depth * 15);
-  verb.setTankModShape(plate_tank_mod_shape);
+  verb.setPreDelay(platePreDelay);
+  verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
+  verb.setDecay(plateDecay);
+  verb.setTankDiffusion(plateTankDiffusion);
+  verb.setTankFilterHighCutFrequency(plateTankDampHigh);
+  verb.setTankModSpeed(plateTankModSpeed * 8);
+  verb.setTankModDepth(plateTankModDepth * 15);
+  verb.setTankModShape(plateTankModShape);
 }
 
 void saveSettings() {
 	//Reference to local copy of settings stored in flash
-	Settings &localSettings = saved_settings.GetSettings();
+	Settings &localSettings = savedSettings.GetSettings();
 
   localSettings.version = SETTINGS_VERSION;
-  localSettings.decay = plate_decay;
-  localSettings.diffusion = plate_tank_diffusion;
-  localSettings.inputCutoffFreq = plate_input_damp_high;
-  localSettings.tankCutoffFreq = plate_tank_damp_high;
-  localSettings.tankModSpeed = plate_tank_mod_speed;
-  localSettings.tankModDepth = plate_tank_mod_depth;
-  localSettings.tankModShape = plate_tank_mod_shape;
-  localSettings.preDelay = plate_pre_delay;
+  localSettings.decay = plateDecay;
+  localSettings.diffusion = plateTankDiffusion;
+  localSettings.inputCutoffFreq = plateInputDampHigh;
+  localSettings.tankCutoffFreq = plateTankDampHigh;
+  localSettings.tankModSpeed = plateTankModSpeed;
+  localSettings.tankModDepth = plateTankModDepth;
+  localSettings.tankModShape = plateTankModShape;
+  localSettings.preDelay = platePreDelay;
 
 	trigger_settings_save = true;
 }
 
 void saveMonoStereoSettings() {
-  Settings &localSettings = saved_settings.GetSettings();
+  Settings &localSettings = savedSettings.GetSettings();
 
   localSettings.monoStereoMode = mono_stereo_mode;
   localSettings.makeupGainMode = current_makeup_gain;  // NEW: Save makeup gain
@@ -379,31 +379,31 @@ void saveMonoStereoSettings() {
 
 /// @brief Restore the reverb settings from the saved settings.
 void restoreReverbSettings() {
-	Settings &localSettings = saved_settings.GetSettings();
+	Settings &localSettings = savedSettings.GetSettings();
 
-  plate_decay = localSettings.decay;
-  plate_tank_diffusion = localSettings.diffusion;
-  plate_input_damp_high = localSettings.inputCutoffFreq;
-  plate_tank_damp_high = localSettings.tankCutoffFreq;
-  plate_tank_mod_speed = localSettings.tankModSpeed;
-  plate_tank_mod_depth = localSettings.tankModDepth;
-  plate_tank_mod_shape = localSettings.tankModShape;
-  plate_pre_delay = localSettings.preDelay;
+  plateDecay = localSettings.decay;
+  plateTankDiffusion = localSettings.diffusion;
+  plateInputDampHigh = localSettings.inputCutoffFreq;
+  plateTankDampHigh = localSettings.tankCutoffFreq;
+  plateTankModSpeed = localSettings.tankModSpeed;
+  plateTankModDepth = localSettings.tankModDepth;
+  plateTankModShape = localSettings.tankModShape;
+  platePreDelay = localSettings.preDelay;
 
-  verb.setDecay(plate_decay);
-  verb.setTankDiffusion(plate_tank_diffusion);
-  verb.setInputFilterHighCutoffPitch(plate_input_damp_high);
-  verb.setTankFilterHighCutFrequency(plate_tank_damp_high);
+  verb.setDecay(plateDecay);
+  verb.setTankDiffusion(plateTankDiffusion);
+  verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
+  verb.setTankFilterHighCutFrequency(plateTankDampHigh);
 
-  verb.setTankModSpeed(plate_tank_mod_speed * 8);
-  verb.setTankModDepth(plate_tank_mod_depth * 15);
-  verb.setTankModShape(plate_tank_mod_shape);
-  verb.setPreDelay(plate_pre_delay);    
+  verb.setTankModSpeed(plateTankModSpeed * 8);
+  verb.setTankModDepth(plateTankModDepth * 15);
+  verb.setTankModShape(plateTankModShape);
+  verb.setPreDelay(platePreDelay);    
 }
 
 /// @brief Restore the mono-stereo settings from the saved settings.
 void restoreMonoStereoSettings() {
-  Settings &localSettings = saved_settings.GetSettings();
+  Settings &localSettings = savedSettings.GetSettings();
 
   mono_stereo_mode = static_cast<MonoStereoMode>(localSettings.monoStereoMode);
   current_makeup_gain = static_cast<TremDelMakeUpGain>(localSettings.makeupGainMode);  // NEW: Restore makeup gain
@@ -683,7 +683,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
   led_left.Update();
   led_right.Update();
 
-  plate_wet = p_verb_amt.Process();
+  plateWet = p_verb_amt.Process();
 
   if (pedal_mode == PEDAL_MODE_NORMAL) {
     osc.SetFreq(p_trem_speed.Process());
@@ -731,7 +731,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
 
     if (tap_tempo_controls_delay) {
       // Check for knob takeover (5% movement)
-      if (fabs(delayTimeCurrentValue - delay_time_last_value) > KNOB_TAKEOVER_THRESHOLD) {
+      if (fabs(delayTimeCurrentValue - delayTimeLastValue) > KNOB_TAKEOVER_THRESHOLD) {
         // Knob has moved - take back control from tap tempo
         tap_tempo_controls_delay = false;
         master_delay_time_samples = p_delay_time.Process();
@@ -744,7 +744,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       master_delay_time_samples = p_delay_time.Process();
     }
 
-    delay_time_last_value = delayTimeCurrentValue;
+    delayTimeLastValue = delayTimeCurrentValue;
 
     // Apply subdivision to master time
     float finalDelayTime = master_delay_time_samples * subdivisionMultiplier;
@@ -753,33 +753,33 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     finalDelayTime = daisysp::fclamp(finalDelayTime, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
 
     // Set delay targets
-    delay_l.delayTarget = finalDelayTime;
-    delay_r.delayTarget = finalDelayTime;
+    delayL.delayTarget = finalDelayTime;
+    delayR.delayTarget = finalDelayTime;
 
     // Feedback unchanged
-    delay_l.feedback = delay_r.feedback = p_delay_feedback.Process();
+    delayL.feedback = delayR.feedback = p_delay_feedback.Process();
     delay_drywet = (int)p_delay_amt.Process();
 
     // Reverb dry/wet mode
     switch (K_REVERB_KNOB_MAP[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1)]) {
       case REVERB_KNOB_ALL_DRY:
-        plate_dry = 1.0;
+        plateDry = 1.0;
         break;
       case REVERB_KNOB_DRY_WET_MIX:
-        plate_dry = 1.0 - plate_wet;
+        plateDry = 1.0 - plateWet;
         break;
       case REVERB_KNOB_ALL_WET:
-        plate_dry = 0.0f;
+        plateDry = 0.0f;
         break;
     }
   } else if (pedal_mode == PEDAL_MODE_EDIT_REVERB) {
     // Edit mode
-    plate_dry = 1.0; // Always use dry 100% in edit mode
-    plate_pre_delay = p_knob_2.Process() * 0.25;
-    plate_decay = p_knob_3.Process();        
-    plate_tank_diffusion = p_knob_4.Process();
-    plate_input_damp_high = p_knob_5.Process() * 10.0; // Dattorro takes values for this between 0 and 10
-    plate_tank_damp_high = p_knob_6.Process() * 10.0; // Dattorro takes values for this between 0 and 10
+    plateDry = 1.0; // Always use dry 100% in edit mode
+    platePreDelay = p_knob_2.Process() * 0.25;
+    plateDecay = p_knob_3.Process();        
+    plateTankDiffusion = p_knob_4.Process();
+    plateInputDampHigh = p_knob_5.Process() * 10.0; // Dattorro takes values for this between 0 and 10
+    plateTankDampHigh = p_knob_6.Process() * 10.0; // Dattorro takes values for this between 0 and 10
 
     //
     // Read in all of the toggle switch values
@@ -787,25 +787,25 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
 
     // Switch 1 - Tank Mod Speed
     static const float tank_mod_speed_values[] = {0.5f, 0.25f, 0.1f};
-    plate_tank_mod_speed = tank_mod_speed_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1)];
+    plateTankModSpeed = tank_mod_speed_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1)];
 
     // Switch 2 - Tank Mod Depth
     static const float tank_mod_depth_values[] = {0.5f, 0.25f, 0.1f};
-    plate_tank_mod_depth = tank_mod_depth_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+    plateTankModDepth = tank_mod_depth_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
 
     // Switch 3 - Tank Mod Shape
     static const float tank_mod_shape_values[] = {0.5f, 0.25f, 0.1f};
-    plate_tank_mod_shape = tank_mod_shape_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
+    plateTankModShape = tank_mod_shape_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
 
-    verb.setDecay(plate_decay);
-    verb.setTankDiffusion(plate_tank_diffusion);
-    verb.setInputFilterHighCutoffPitch(plate_input_damp_high);
-    verb.setTankFilterHighCutFrequency(plate_tank_damp_high);
+    verb.setDecay(plateDecay);
+    verb.setTankDiffusion(plateTankDiffusion);
+    verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
+    verb.setTankFilterHighCutFrequency(plateTankDampHigh);
 
-    verb.setTankModSpeed(plate_tank_mod_speed * 8);
-    verb.setTankModDepth(plate_tank_mod_depth * 15);
-    verb.setTankModShape(plate_tank_mod_shape);
-    verb.setPreDelay(plate_pre_delay);    
+    verb.setTankModSpeed(plateTankModSpeed * 8);
+    verb.setTankModDepth(plateTankModDepth * 15);
+    verb.setTankModShape(plateTankModShape);
+    verb.setPreDelay(platePreDelay);    
   } else if (pedal_mode == PEDAL_MODE_EDIT_MONO_STEREO) {
     // Mono-Stereo edit mode
     // SWITCH_3: Read mono-stereo mode
@@ -864,8 +864,8 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       float fDryWet = delay_drywet / 100.0f;
 
       // update delayline with feedback
-      float sigL = delay_l.Process(sL);
-      float sigR = delay_r.Process(sR);
+      float sigL = delayL.Process(sL);
+      float sigR = delayR.Process(sR);
       mixL += sigL;
       mixR += sigR;
 
@@ -889,9 +889,9 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         // === HARMONIC TREMOLO ===
 
         // Process left channel
-        harmonic_filter_l.Process(sL);
-        float lowL = harmonic_filter_l.Low();
-        float highL = harmonic_filter_l.High();
+        harmonicFilterL.Process(sL);
+        float lowL = harmonicFilterL.Low();
+        float highL = harmonicFilterL.High();
 
         // Apply tremolo with opposite phase to each band
         float lowModL = lowL * (1.0f + lfoSample);
@@ -899,9 +899,9 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         sL = (lowModL + highModL) * tremMakeupGain;
 
         // Process right channel
-        harmonic_filter_r.Process(sR);
-        float lowR = harmonic_filter_r.Low();
-        float highR = harmonic_filter_r.High();
+        harmonicFilterR.Process(sR);
+        float lowR = harmonicFilterR.Low();
+        float highR = harmonicFilterR.High();
 
         float lowModR = lowR * (1.0f + lfoSample);
         float highModR = highR * (1.0f - lfoSample);
@@ -922,20 +922,20 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // enabled again it will already have the current input signal already
     // being processed.
 
-    left_input = hardLimit100(sL) * reverb_dry_scale_factor;
-    right_input = hardLimit100(sR) * reverb_dry_scale_factor;
+    leftInput = hardLimit100(sL) * reverbDryScaleFactor;
+    rightInput = hardLimit100(sR) * reverbDryScaleFactor;
 
-    verb.process(left_input * MINUS_18DB_GAIN * MINUS_20DB_GAIN * (1.0f + input_amplification * 7.0f) * clearPopCancelValue,
-                  right_input * MINUS_18DB_GAIN * MINUS_20DB_GAIN * (1.0f + input_amplification * 7.0f) * clearPopCancelValue);
+    verb.process(leftInput * MINUS_18DB_GAIN * MINUS_20DB_GAIN * (1.0f + inputAmplification * 7.0f) * clearPopCancelValue,
+                  rightInput * MINUS_18DB_GAIN * MINUS_20DB_GAIN * (1.0f + inputAmplification * 7.0f) * clearPopCancelValue);
 
     if (!bypass_verb) {
-      // left_output = ((left_input * plate_dry * 0.1) + (verb.getLeftOutput() * plate_wet * clearPopCancelValue));
-      // right_output = ((right_input * plate_dry * 0.1) + (verb.getRightOutput() * plate_wet * clearPopCancelValue));
-      left_output = ((left_input * plate_dry * reverb_reverse_scale_factor) + (verb.getLeftOutput() * plate_wet * clearPopCancelValue));
-      right_output = ((right_input * plate_dry * reverb_reverse_scale_factor) + (verb.getRightOutput() * plate_wet * clearPopCancelValue));
+      // leftOutput = ((leftInput * plateDry * 0.1) + (verb.getLeftOutput() * plateWet * clearPopCancelValue));
+      // rightOutput = ((rightInput * plateDry * 0.1) + (verb.getRightOutput() * plateWet * clearPopCancelValue));
+      leftOutput = ((leftInput * plateDry * reverbReverseScaleFactor) + (verb.getLeftOutput() * plateWet * clearPopCancelValue));
+      rightOutput = ((rightInput * plateDry * reverbReverseScaleFactor) + (verb.getRightOutput() * plateWet * clearPopCancelValue));
 
-      sL = left_output;
-      sR = right_output;
+      sL = leftOutput;
+      sR = rightOutput;
     }
 
     if (mono_stereo_mode == MS_MODE_MIMO) {
@@ -979,20 +979,20 @@ int main() {
   p_delay_feedback.Init(hw.knobs[Hothouse::KNOB_5], 0.0f, 1.0f, Parameter::LINEAR);
   p_delay_amt.Init(hw.knobs[Hothouse::KNOB_6], 0.0f, 100.0f, Parameter::LINEAR);
 
-  del_mem_l.Init();
-  del_mem_r.Init();
-  delay_l.del = &del_mem_l;
-  delay_r.del = &del_mem_r;
+  delMemL.Init();
+  delMemR.Init();
+  delayL.del = &delMemL;
+  delayR.del = &delMemR;
 
   osc.Init(hw.AudioSampleRate());
 
   // Initialize harmonic tremolo filters (state variable filters for crossover)
-  harmonic_filter_l.Init(hw.AudioSampleRate());
-  harmonic_filter_r.Init(hw.AudioSampleRate());
-  harmonic_filter_l.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
-  harmonic_filter_r.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
-  harmonic_filter_l.SetRes(0.5f);  // Minimal resonance for flat response
-  harmonic_filter_r.SetRes(0.5f);
+  harmonicFilterL.Init(hw.AudioSampleRate());
+  harmonicFilterR.Init(hw.AudioSampleRate());
+  harmonicFilterL.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
+  harmonicFilterR.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
+  harmonicFilterL.SetRes(0.5f);  // Minimal resonance for flat response
+  harmonicFilterR.SetRes(0.5f);
 
   //
   // Dattorro Reverb Initialization
@@ -1008,25 +1008,25 @@ int main() {
   hold = 1.;
 
   verb.setSampleRate(48000);
-  verb.setTimeScale(plate_time_scale);
-  verb.enableInputDiffusion(plate_diffusion_enabled);
-  verb.setInputFilterLowCutoffPitch(plate_input_damp_low);
-  verb.setTankFilterLowCutFrequency(plate_tank_damp_low);
+  verb.setTimeScale(plateTimeScale);
+  verb.enableInputDiffusion(plateDiffusionEnabled);
+  verb.setInputFilterLowCutoffPitch(plateInputDampLow);
+  verb.setTankFilterLowCutFrequency(plateTankDampLow);
 
   Settings defaultSettings = {
     SETTINGS_VERSION, // version
-    plate_decay,
-    plate_tank_diffusion,
-    plate_input_damp_high,
-    plate_tank_damp_high,
-    plate_tank_mod_speed,
-    plate_tank_mod_depth,
-    plate_tank_mod_shape,
-    plate_pre_delay,
+    plateDecay,
+    plateTankDiffusion,
+    plateInputDampHigh,
+    plateTankDampHigh,
+    plateTankModSpeed,
+    plateTankModDepth,
+    plateTankModShape,
+    platePreDelay,
     MS_MODE_MIMO,               // monoStereoMode
     TV_MAKEUP_GAIN_NORMAL       // makeupGainMode (NEW)
   };
-  saved_settings.Init(defaultSettings);
+  savedSettings.Init(defaultSettings);
 
   loadSettings();
 
@@ -1053,7 +1053,7 @@ int main() {
     checkDfuModeBothSwitches();
 
     if(trigger_settings_save) {
-			saved_settings.Save(); // Writing locally stored settings to the external flash
+			savedSettings.Save(); // Writing locally stored settings to the external flash
 			trigger_settings_save = false;
 	} else if (is_factory_reset_mode) {
       hw.ProcessAllControls();
@@ -1090,7 +1090,7 @@ int main() {
         blinkInterval -= blinkFasterAmount; // make the blinking faster as a UI feedback that the stage has been met
         quickLedFlash();
       } else if (factory_reset_stage == 3 && knob1Value <= lowKnobThreshold) {
-        saved_settings.RestoreDefaults();
+        savedSettings.RestoreDefaults();
         loadSettings();
         quickLedFlash();          
 
