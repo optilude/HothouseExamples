@@ -602,7 +602,7 @@ void checkDfuModeBothSwitches() {
 }
 
 inline float hardLimit100(const float &x) {
-    return (x > 1.) ? 1. : ((x < -1.) ? -1. : x);
+  return (x > 1.) ? 1. : ((x < -1.) ? -1. : x);
 }
 
 void quickLedFlash() {
@@ -620,17 +620,15 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
 
   if (pedalMode == PEDAL_MODE_EDIT_REVERB) {
     // Edit mode
-
     // Blink the left & right LEDs
-    {
-      static uint32_t editCount = 0;
-      static bool ledState = true;
-      if (++editCount >= hw.AudioCallbackRate() / 2) {
-        editCount = 0;
-        ledState = !ledState;
-        ledLeft.Set(ledState ? 1.0f : 0.0f);
-        ledRight.Set(ledState ? 1.0f : 0.0f);
-      }
+
+    static uint32_t editCount = 0;
+    static bool ledState = true;
+    if (++editCount >= hw.AudioCallbackRate() / 2) {
+      editCount = 0;
+      ledState = !ledState;
+      ledLeft.Set(ledState ? 1.0f : 0.0f);
+      ledRight.Set(ledState ? 1.0f : 0.0f);
     }
   } else if (pedalMode == PEDAL_MODE_EDIT_MONO_STEREO) {
     // Mono-Stereo edit mode
@@ -668,18 +666,17 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     ledLeft.Set(bypassVerb ? 0.0f : 1.0f);
 
     // Reduce number of LED Updates for pulsing trem LED
-    {
-      static int count = 0;
-      // set led 100 times/sec
-      if (++count == hw.AudioCallbackRate() / 100) {
-        count = 0;
-        // If just delay is on, show full-strength LED
-        // If just trem is on, show 40% pulsing LED
-        // If both are on, show 100% pulsing LED
-        ledRight.Set(bypassTrem ? bypassDelay ? 0.0f : 1.0 : bypassDelay ? tremVal * 0.4 : tremVal);
-      }
+    static int count = 0;
+    // set led 100 times/sec
+    if (++count == hw.AudioCallbackRate() / 100) {
+      count = 0;
+      // If just delay is on, show full-strength LED
+      // If just trem is on, show 40% pulsing LED
+      // If both are on, show 100% pulsing LED
+      ledRight.Set(bypassTrem ? bypassDelay ? 0.0f : 1.0 : bypassDelay ? tremVal * 0.4 : tremVal);
     }
   }
+
   ledLeft.Update();
   ledRight.Update();
 
@@ -999,9 +996,9 @@ int main() {
   //
   // Zero out the InterpDelay buffers used by the plate reverb
   for(int i = 0; i < 50; i++) {
-      for(int j = 0; j < 144000; j++) {
-          sdramData[i][j] = 0.;
-      }
+    for(int j = 0; j < 144000; j++) {
+      sdramData[i][j] = 0.;
+    }
   }
   // Set this to 1.0 or plate reverb won't work. This is defined in Dattorro's
   // InterpDelay.cpp file.
@@ -1055,7 +1052,7 @@ int main() {
     if(triggerSettingsSave) {
 			savedSettings.Save(); // Writing locally stored settings to the external flash
 			triggerSettingsSave = false;
-	} else if (isFactoryResetMode) {
+	  } else if (isFactoryResetMode) {
       hw.ProcessAllControls();
 
       static uint32_t lastLedToggleTime = 0;
@@ -1063,6 +1060,7 @@ int main() {
       static uint32_t blinkInterval = 1000;
       uint32_t now = System::GetNow();
       uint32_t elapsedTime = now - lastLedToggleTime;
+
       if (elapsedTime >= blinkInterval) {
         // Alternate the LED lights in factory reset mode
         lastLedToggleTime = now;
@@ -1104,5 +1102,6 @@ int main() {
     }
     hw.DelayMs(10);
   }
+
   return 0;
 }
