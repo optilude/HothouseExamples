@@ -173,14 +173,15 @@ constexpr TremDelMakeUpGain K_MAKEUP_GAIN_MAP[] = {
 
 constexpr TremoloMode K_TREMOLO_MODE_MAP[] = {
     TREMOLO_SQUARE,     // UP
-    TREMOLO_SINE,       // MIDDLE
-    TREMOLO_HARMONIC,   // DOWN
+    TREMOLO_HARMONIC,   // MIDDLE
+    TREMOLO_SINE,       // DOWN
+     
 };
 
 constexpr DelaySubdivision K_DELAY_SUBDIVISION_MAP[] = {
   DELAY_SUBDIV_DOTTED_EIGHTH,     // UP (1.5x)
   DELAY_SUBDIV_NORMAL,            // MIDDLE (1.0x)
-  DELAY_SUBDIV_QUARTER_TRIPLET,  // DOWN (1.333x)
+  DELAY_SUBDIV_QUARTER_TRIPLET,   // DOWN (1.333x)
 };
 
 Delay delayL;
