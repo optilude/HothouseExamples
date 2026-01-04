@@ -91,9 +91,9 @@ struct Settings {
   int monoStereoMode;
   int makeupGainMode;       // Makeup gain setting
 
-	//Overloading the != operator
-	//This is necessary as this operator is used in the PersistentStorage source code
-	bool operator!=(const Settings& a) const {
+  //Overloading the != operator
+  //This is necessary as this operator is used in the PersistentStorage source code
+  bool operator!=(const Settings& a) const {
     return !(
       a.version == version &&
       a.decay == decay &&
@@ -309,8 +309,8 @@ inline void updateReverbScales(MonoStereoMode mode) {
 
 void loadSettings() {
 
-	// Reference to local copy of settings stored in flash
-	Settings &localSettings = savedSettings.GetSettings();
+  // Reference to local copy of settings stored in flash
+  Settings &localSettings = savedSettings.GetSettings();
 
   int savedVersion = localSettings.version;
 
@@ -352,8 +352,8 @@ void loadSettings() {
 }
 
 void saveSettings() {
-	//Reference to local copy of settings stored in flash
-	Settings &localSettings = savedSettings.GetSettings();
+  //Reference to local copy of settings stored in flash
+  Settings &localSettings = savedSettings.GetSettings();
 
   localSettings.version = SETTINGS_VERSION;
   localSettings.decay = plateDecay;
@@ -365,7 +365,7 @@ void saveSettings() {
   localSettings.tankModShape = plateTankModShape;
   localSettings.preDelay = platePreDelay;
 
-	triggerSettingsSave = true;
+  triggerSettingsSave = true;
 }
 
 void saveMonoStereoSettings() {
@@ -379,7 +379,7 @@ void saveMonoStereoSettings() {
 
 /// @brief Restore the reverb settings from the saved settings.
 void restoreReverbSettings() {
-	Settings &localSettings = savedSettings.GetSettings();
+  Settings &localSettings = savedSettings.GetSettings();
 
   plateDecay = localSettings.decay;
   plateTankDiffusion = localSettings.diffusion;
@@ -1050,9 +1050,9 @@ int main() {
     checkDfuModeBothSwitches();
 
     if(triggerSettingsSave) {
-			savedSettings.Save(); // Writing locally stored settings to the external flash
-			triggerSettingsSave = false;
-	  } else if (isFactoryResetMode) {
+      savedSettings.Save(); // Writing locally stored settings to the external flash
+      triggerSettingsSave = false;
+    } else if (isFactoryResetMode) {
       hw.ProcessAllControls();
 
       static uint32_t lastLedToggleTime = 0;
