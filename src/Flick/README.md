@@ -27,7 +27,7 @@ Updated demo video (6 January 2025):
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
 | KNOB 1 | Reverb Dry/Wet Amount |  |
-| KNOB 2 | Tremolo Speed |  |
+| KNOB 2 | Tremolo Speed | Overridden by tap tempo until knob is moved >5%. |
 | KNOB 3 | Tremolo Depth |  |
 | KNOB 4 | Delay Time | Sets master tempo for delay subdivisions. Overridden by tap tempo until knob is moved >5%. |
 | KNOB 5 | Delay Feedback |  |
@@ -56,12 +56,13 @@ To enter DFU mode for firmware updates via USB:
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
 | FOOTSWITCH 1 | **EXIT** Tap Tempo Mode | Returns to normal mode without changing tempo |
-| FOOTSWITCH 2 | **TAP** Tempo | Each tap sets the delay time based on interval between taps<br/>Tempo range: 50ms - 4 seconds (15-1200 BPM) |
+| FOOTSWITCH 2 | **TAP** Tempo | Each tap sets the delay time and tremolo speed based on interval between taps<br/>Tempo range: 50ms - 4 seconds (15-1200 BPM) |
 
 **Behavior:**
-- Tap tempo overrides KNOB 4 (delay time knob)
-- Moving KNOB 4 more than 5% exits tap tempo and returns control to the knob
-- Delay subdivisions (SWITCH 3) apply to tap tempo time
+- Tap tempo overrides KNOB 2 (tremolo speed) and KNOB 4 (delay time)
+- Moving either knob more than 5% returns control to that knob independently
+- Delay subdivisions (SWITCH 3) apply to tap tempo delay time
+- Tremolo speed is set to the tap tempo frequency (clamped to 0.2-16 Hz)
 - Mode auto-exits after 5 seconds of no taps
 - Tap tempo does **not** persist across power cycles
 

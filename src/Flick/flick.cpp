@@ -36,11 +36,27 @@ using daisysp::fonepole;
 
 /// Increment this when changing the settings struct so the software will know
 /// to reset to defaults if this ever changes.
-#define SETTINGS_VERSION 3
+constexpr int SETTINGS_VERSION = 3;
+
+// Audio configuration constants
+constexpr float SAMPLE_RATE = 48000.0f;  // Audio sample rate in Hz
+constexpr size_t MAX_DELAY = static_cast<size_t>(SAMPLE_RATE * 2.0f); // 4 second max delay
+
+// Tremolo constants
+constexpr float TREMOLO_SPEED_MIN = 0.2f;   // Minimum tremolo speed in Hz
+constexpr float TREMOLO_SPEED_MAX = 16.0f;  // Maximum tremolo speed in Hz
+constexpr float TREMOLO_DEPTH_SCALE = 0.5f; // Scale factor for tremolo depth (0-0.5 range)
+constexpr float TREMOLO_LED_BRIGHTNESS = 0.4f; // LED brightness when only tremolo is active
+
+// Delay constants
+constexpr float DELAY_TIME_MIN_SECONDS = 0.05f;  // Minimum delay time (50ms)
+constexpr float DELAY_WET_MIX_ATTENUATION = 0.333f; // Attenuation for wet delay signal
+constexpr float DELAY_DRY_WET_PERCENT_MAX = 100.0f; // Max value for dry/wet percentage
+
+// LED constants
+constexpr float TAP_TEMPO_BLINK_DUTY_CYCLE = 0.1f; // 10% duty cycle for tap tempo LED
 
 Hothouse hw;
-
-#define MAX_DELAY static_cast<size_t>(48000 * 2.0f) // 4 second max delay
 
 enum PedalMode {
   PEDAL_MODE_NORMAL,
@@ -68,14 +84,15 @@ enum TremoloMode {
 };
 
 // Tap tempo constants
-const uint32_t TAP_TEMPO_TIMEOUT_MS = 5000;     // Exit tap tempo after 5 seconds
-const uint32_t TAP_TEMPO_MIN_INTERVAL_MS = 50;  // Min 50ms = 1200 BPM (practical limit)
-const uint32_t TAP_TEMPO_MAX_INTERVAL_MS = 4000; // Max 4 seconds = 15 BPM
-const float TAP_TEMPO_SAMPLES_MIN = 2400.0f;    // 50ms at 48kHz
-const float TAP_TEMPO_SAMPLES_MAX = 192000.0f;  // 4s at 48kHz
+constexpr uint32_t TAP_TEMPO_TIMEOUT_MS = 5000;     // Exit tap tempo after 5 seconds
+constexpr uint32_t TAP_TEMPO_MIN_INTERVAL_MS = 50;  // Min 50ms = 1200 BPM (practical limit)
+constexpr uint32_t TAP_TEMPO_MAX_INTERVAL_MS = 4000; // Max 4 seconds = 15 BPM
+constexpr float MS_PER_SECOND = 1000.0f;            // Milliseconds per second conversion
+constexpr float TAP_TEMPO_SAMPLES_MIN = (TAP_TEMPO_MIN_INTERVAL_MS / MS_PER_SECOND) * SAMPLE_RATE;  // 50ms
+constexpr float TAP_TEMPO_SAMPLES_MAX = (TAP_TEMPO_MAX_INTERVAL_MS / MS_PER_SECOND) * SAMPLE_RATE;  // 4s
 
 // DFU mode - both switches
-const uint32_t DFU_BOTH_SWITCHES_HOLD_TIME_MS = 5000;  // 5 seconds
+constexpr uint32_t DFU_BOTH_SWITCHES_HOLD_TIME_MS = 5000;  // 5 seconds
 
 // Persistent Settings
 struct Settings {
@@ -119,7 +136,7 @@ float dcOffset = 0;
 DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS delMemL;
 DelayLine<float, MAX_DELAY> DSY_SDRAM_BSS delMemR;
 
-Dattorro verb(48000, 16, 4.0);
+Dattorro verb(SAMPLE_RATE, 16, 4.0);
 PedalMode pedalMode = PEDAL_MODE_NORMAL;
 MonoStereoMode monoStereoMode = MS_MODE_MIMO;
 
@@ -204,10 +221,13 @@ uint32_t tapTempoLastTapTime = 0;
 uint32_t tapTempoIntervalMs = 0;
 float tapTempoDelaySamples = 0.0f;
 bool tapTempoControlsDelay = false;  // True when tap tempo overrides knob
+float tapTempoTremoloFreqHz = 0.0f;
+bool tapTempoControlsTremolo = false;  // True when tap tempo overrides tremolo knob
 
-// Knob takeover for KNOB_4 (delay time)
+// Knob takeover for KNOB_4 (delay time) and KNOB_2 (tremolo speed)
 float delayTimeLastValue = 0.0f;
-const float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required
+float tremSpeedLastValue = 0.0f;
+constexpr float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required
 
 // Master delay time (before subdivision multiplier)
 float masterDelayTimeSamples = 0.0f;
@@ -223,7 +243,7 @@ TremDelMakeUpGain currentMakeupGain = TV_MAKEUP_GAIN_NORMAL;
 using daisysp::Svf;
 Svf harmonicFilterL;  // State variable filter for crossover
 Svf harmonicFilterR;
-const float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
+constexpr float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
 
 // Reverb vars
 bool plateDiffusionEnabled = true;
@@ -262,8 +282,8 @@ float plateTankModSpeed = 0.1;
 float plateTankModDepth = 0.1;
 float plateTankModShape = 0.25;
 
-const float MINUS_18DB_GAIN = 0.12589254;
-const float MINUS_20DB_GAIN = 0.1;
+constexpr float MINUS_18DB_GAIN = 0.12589254;
+constexpr float MINUS_20DB_GAIN = 0.1;
 
 float leftInput = 0.;
 float rightInput = 0.;
@@ -535,16 +555,23 @@ void handleTapTempoTap() {
 
       tapTempoIntervalMs = interval;
 
-      // Convert to samples at 48kHz
-      tapTempoDelaySamples = (interval / 1000.0f) * 48000.0f;
+      // Convert to delay samples at 48kHz
+      tapTempoDelaySamples = (interval / MS_PER_SECOND) * SAMPLE_RATE;
 
       // Clamp to valid delay range
       tapTempoDelaySamples = daisysp::fclamp(tapTempoDelaySamples,
                                                  TAP_TEMPO_SAMPLES_MIN,
                                                  TAP_TEMPO_SAMPLES_MAX);
 
-      // Enable tap tempo control
+      // Convert to tremolo frequency (Hz)
+      tapTempoTremoloFreqHz = MS_PER_SECOND / interval;
+
+      // Clamp to tremolo speed range
+      tapTempoTremoloFreqHz = daisysp::fclamp(tapTempoTremoloFreqHz, TREMOLO_SPEED_MIN, TREMOLO_SPEED_MAX);
+
+      // Enable tap tempo control for both delay and tremolo
       tapTempoControlsDelay = true;
+      tapTempoControlsTremolo = true;
       masterDelayTimeSamples = tapTempoDelaySamples;
     }
   }
@@ -650,7 +677,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // LED_2: Blink at current tempo (if tempo set)
     if (tapTempoIntervalMs > 0) {
       uint32_t blink_phase = System::GetNow() % tapTempoIntervalMs;
-      float blink_threshold = tapTempoIntervalMs * 0.1f;  // 10% duty cycle
+      float blink_threshold = tapTempoIntervalMs * TAP_TEMPO_BLINK_DUTY_CYCLE;
 
       if (blink_phase < blink_threshold) {
         ledRight.Set(1.0f);
@@ -674,7 +701,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       // If just delay is on, show full-strength LED
       // If just trem is on, show 40% pulsing LED
       // If both are on, show 100% pulsing LED
-      ledRight.Set(bypassTrem ? bypassDelay ? 0.0f : 1.0 : bypassDelay ? tremVal * 0.4 : tremVal);
+      ledRight.Set(bypassTrem ? bypassDelay ? 0.0f : 1.0 : bypassDelay ? tremVal * TREMOLO_LED_BRIGHTNESS : tremVal);
     }
   }
 
@@ -684,10 +711,29 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
   plateWet = pVerbAmt.Process();
 
   if (pedalMode == PEDAL_MODE_NORMAL) {
-    osc.SetFreq(pTremSpeed.Process());
+    // Tremolo speed with tap tempo support
+    float tremSpeedCurrentValue = hw.knobs[Hothouse::KNOB_2].Value();
+
+    if (tapTempoControlsTremolo) {
+      // Check for knob takeover (5% movement)
+      if (fabs(tremSpeedCurrentValue - tremSpeedLastValue) > KNOB_TAKEOVER_THRESHOLD) {
+        // Knob has moved - take back control from tap tempo
+        tapTempoControlsTremolo = false;
+        osc.SetFreq(pTremSpeed.Process());
+      } else {
+        // Tap tempo still controls tremolo speed
+        osc.SetFreq(tapTempoTremoloFreqHz);
+      }
+    } else {
+      // Normal knob control
+      osc.SetFreq(pTremSpeed.Process());
+    }
+
+    tremSpeedLastValue = tremSpeedCurrentValue;
+
     static float depth = 0;
     depth = daisysp::fclamp(pTremDepth.Process(), 0.f, 1.f);
-    depth *= 0.5f;
+    depth *= TREMOLO_DEPTH_SCALE;
     osc.SetAmp(depth);
     dcOffset = 1.f - depth;
 
@@ -859,7 +905,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     if (!bypassDelay) {
       float mixL = 0;
       float mixR = 0;
-      float fDryWet = delayDryWet / 100.0f;
+      float fDryWet = delayDryWet / DELAY_DRY_WET_PERCENT_MAX;
 
       // update delayline with feedback
       float sigL = delayL.Process(sL);
@@ -868,8 +914,8 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       mixR += sigR;
 
       // apply drywet and attenuate
-      sL = fDryWet * mixL * 0.333f + (1.0f - fDryWet) * sL * delayMakeupGain;
-      sR = fDryWet * mixR * 0.333f + (1.0f - fDryWet) * sR * delayMakeupGain;
+      sL = fDryWet * mixL * DELAY_WET_MIX_ATTENUATION + (1.0f - fDryWet) * sL * delayMakeupGain;
+      sR = fDryWet * mixR * DELAY_WET_MIX_ATTENUATION + (1.0f - fDryWet) * sR * delayMakeupGain;
     }
 
     if (!bypassTrem) {
@@ -970,12 +1016,12 @@ int main() {
 
   pVerbAmt.Init(hw.knobs[Hothouse::KNOB_1], 0.0f, 1.0f, Parameter::LINEAR);
 
-  pTremSpeed.Init(hw.knobs[Hothouse::KNOB_2], 0.2f, 16.0f, Parameter::LINEAR);
+  pTremSpeed.Init(hw.knobs[Hothouse::KNOB_2], TREMOLO_SPEED_MIN, TREMOLO_SPEED_MAX, Parameter::LINEAR);
   pTremDepth.Init(hw.knobs[Hothouse::KNOB_3], 0.0f, 1.0f, Parameter::LINEAR);
 
-  pDelayTime.Init(hw.knobs[Hothouse::KNOB_4], hw.AudioSampleRate() * 0.05f, MAX_DELAY, Parameter::LOGARITHMIC);
+  pDelayTime.Init(hw.knobs[Hothouse::KNOB_4], hw.AudioSampleRate() * DELAY_TIME_MIN_SECONDS, MAX_DELAY, Parameter::LOGARITHMIC);
   pDelayFeedback.Init(hw.knobs[Hothouse::KNOB_5], 0.0f, 1.0f, Parameter::LINEAR);
-  pDelayAmt.Init(hw.knobs[Hothouse::KNOB_6], 0.0f, 100.0f, Parameter::LINEAR);
+  pDelayAmt.Init(hw.knobs[Hothouse::KNOB_6], 0.0f, DELAY_DRY_WET_PERCENT_MAX, Parameter::LINEAR);
 
   delMemL.Init();
   delMemR.Init();
@@ -1005,7 +1051,7 @@ int main() {
   // InterpDelay.cpp file.
   hold = 1.;
 
-  verb.setSampleRate(48000);
+  verb.setSampleRate(SAMPLE_RATE);
   verb.setTimeScale(plateTimeScale);
   verb.enableInputDiffusion(plateDiffusionEnabled);
   verb.setInputFilterLowCutoffPitch(plateInputDampLow);
