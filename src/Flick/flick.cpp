@@ -943,6 +943,9 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       // Generate LFO sample
       float lfoSample = osc.Process();
 
+      // DC offset to make LFO unipolar (0 to peak) - for LED display
+      tremVal = dcOffset + lfoSample;
+
       // Apply tremolo based on mode
       if (tremMode == TREMOLO_HARMONIC) {
         // === HARMONIC TREMOLO ===
@@ -968,9 +971,6 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
 
       } else {
         // === STANDARD TREMOLO (Square or Sine) ===
-
-        // DC offset to make LFO unipolar (0 to peak)
-        tremVal = dcOffset + lfoSample;
 
         sL *= tremVal * tremMakeupGain;
         sR *= tremVal * tremMakeupGain;
