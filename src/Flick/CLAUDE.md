@@ -282,7 +282,7 @@ struct Delay {
 | **KNOB_6** | Delay Mix | 0-100% | Linear |
 | **SWITCH_1** | Reverb Knob Mode | 3-position | UP=Wet Only, MID=Mix, DOWN=Dry Only |
 | **SWITCH_2** | Tremolo Mode | 3-position | UP=Square, MID=Sine, DOWN=**Harmonic** |
-| **SWITCH_3** | Delay Subdivision | 3-position | UP=Dotted 8th (1.5x), MID=Normal (1:1), DOWN=Quarter triplet (1.333x) |
+| **SWITCH_3** | Delay Subdivision | 3-position | UP=Dotted 8th (0.75x faster), MID=Normal (1:1), DOWN=Quarter triplet (0.666x faster) |
 | **FOOTSWITCH_1** | Reverb Bypass | Momentary | Press=bypass, Double=tap tempo, Long=reverb edit |
 | **FOOTSWITCH_2** | Delay Bypass | Momentary | Press=bypass, Double=tremolo toggle, Long=mono-stereo edit |
 | **BOTH FOOTSWITCHES** | DFU Mode | Hold 5+ sec | Enters USB bootloader for firmware updates |
@@ -375,17 +375,27 @@ if (tapTempoControlsTremolo) {
 DelaySubdivision subdivision = kDelaySubdivisionMap[TOGGLESWITCH_3];
 switch (subdivision) {
   case DELAY_SUBDIV_DOTTED_EIGHTH:
-    subdivision_multiplier = 1.5f;      // UP position
+    subdivision_multiplier = 0.75f;      // UP position - 3/4 of quarter note
     break;
   case DELAY_SUBDIV_QUARTER_TRIPLET:
-    subdivision_multiplier = 1.333333f; // DOWN position
+    subdivision_multiplier = 0.666666f;  // DOWN position - 2/3 of quarter note
     break;
   case DELAY_SUBDIV_NORMAL:
   default:
-    subdivision_multiplier = 1.0f;      // MIDDLE position
+    subdivision_multiplier = 1.0f;       // MIDDLE position - quarter note
     break;
 }
 ```
+
+**Musical Context**:
+- **Dotted eighth note** (0.75x): Creates faster repeats at 3/4 of the base tempo
+- **Quarter triplet** (0.666x): Creates faster repeats at 2/3 of the base tempo
+- **Normal quarter note** (1.0x): Base tempo, no subdivision
+
+**Example**: If master tempo is 600ms (100 BPM quarter notes):
+- Dotted eighth: 450ms (0.75x) - faster repeats
+- Normal: 600ms (1.0x) - base tempo
+- Quarter triplet: 400ms (0.666x) - fastest repeats
 
 **Application**:
 ```cpp
@@ -873,7 +883,7 @@ KNOB 6: Delay Mix                                        FS2 Long:   Mono-Stereo
 - **Tap Tempo**: Double-press FS1, tap FS2 to set **both delay and tremolo** tempo (50ms-4s range)
   - Delay and tremolo knobs independently return control with >5% movement
   - Does not persist across restarts (safer, prevents state misalignment)
-- **Delay Subdivisions**: Dotted eighth (1.5x), normal (1:1), quarter triplet (1.333x)
+- **Delay Subdivisions**: Dotted eighth (0.75x faster), normal (1:1), quarter triplet (0.666x faster)
 - **Harmonic Tremolo**: Splits signal at 800Hz, modulates high/low bands 180° out of phase
 - **Makeup Gain Persistence**: Now saved to flash, set in mono-stereo edit mode (SWITCH_2)
 - **DFU Mode Update**: Both footswitches held 5+ seconds (was: FS1 long press)

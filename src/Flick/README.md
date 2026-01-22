@@ -8,9 +8,9 @@ This is a reverb, tremolo, and delay pedal. The original goal of this pedal was 
 
 **Platerra Reverb:** This is a plate reverb based on the Dattorro reverb.
 
-**Tremolo:** Tremolo with sine wave, square wave, and **harmonic tremolo** settings. Harmonic tremolo splits the signal into high and low frequency bands and modulates them 180° out of phase for a swirling, phase-like effect.
+**Tremolo:** Tremolo with sine wave, square wave, and harmonic tremolo settings. Harmonic tremolo splits the signal into high and low frequency bands and modulates them 180° out of phase for a swirling, phase-like effect.
 
-**Delay:** Digital delay with **tap tempo** and **delay subdivisions** (normal, dotted eighth, quarter note triplet).
+**Delay:** Digital delay with tap tempo and delay subdivisions (normal, dotted eighth, quarter note triplet).
 
 ### Demo
 
@@ -33,15 +33,15 @@ Updated demo video (6 January 2025):
 | KNOB 5 | Delay Feedback |  |
 | KNOB 6 | Delay Dry/Wet Amount |  |
 | SWITCH 1 | Reverb knob function | **UP** - 0% Dry, 0-100% Wet<br/>**MIDDLE** - Dry/Wet Mix<br/>**DOWN** - 100% Dry, 0-100% Wet |
-| SWITCH 2 | Tremolo Mode | **UP** - Square wave<br/>**MIDDLE** - Sine wave<br/>**DOWN** - **Harmonic tremolo** |
-| SWITCH 3 | Delay Subdivision | **UP** - Dotted eighth (1.5x)<br/>**MIDDLE** - Normal (1:1)<br/>**DOWN** - Quarter note triplet (1.333x) |
-| FOOTSWITCH 1 | Reverb On/Off | **Press:** Toggle reverb on/off<br/>**Double-press:** Enter **Tap Tempo mode** (see below)<br/>**Long press:** Enter **Reverb Edit mode** (see below) |
-| FOOTSWITCH 2 | Delay/Tremolo On/Off | **Press:** Toggle delay on/off<br/>**Double-press:** Toggle tremolo on/off<br/>**Long press:** Enter **Mono-Stereo Edit mode** (see below)<br/><br/>**LED:**<br/>- 100% when only delay is active<br/>- 40% pulsing when only tremolo is active<br/>- 100% pulsing when both are active |
+| SWITCH 2 | Tremolo Mode | **UP** - Square wave<br/>**MIDDLE** - Sine wave<br/>**DOWN** - Harmonic tremolo |
+| SWITCH 3 | Delay Subdivision | **UP** - Dotted eighth (3/4)<br/>**MIDDLE** - Normal (1:1)<br/>**DOWN** - Quarter note triplet (2/3) |
+| FOOTSWITCH 1 | Reverb On/Off | **Press:** Toggle reverb on/off<br/>**Double-press:** Enter Tap Tempo mode (see below)<br/>**Long press:** Enter Reverb Edit mode (see below) |
+| FOOTSWITCH 2 | Delay/Tremolo On/Off | **Press:** Toggle delay on/off<br/>**Double-press:** Toggle tremolo on/off<br/>**Long press:** Enter Mono-Stereo Edit mode (see below)<br/><br/>**LED:**<br/>- 100% when only delay is active<br/>- 40% pulsing when only tremolo is active<br/>- 100% pulsing when both are active |
 
 ### DFU Mode (Firmware Update)
 
 To enter DFU mode for firmware updates via USB:
-- **Hold both footswitches for 5+ seconds**
+- Hold both footswitches for 5+ seconds
 - LEDs will flash alternately 5 times, then device enters bootloader mode
 - Use `make program_dfu` to flash new firmware
 

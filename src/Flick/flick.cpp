@@ -72,9 +72,9 @@ enum MonoStereoMode {                       // Controlled by Toggle Switch 3
 };
 
 enum DelaySubdivision {
-  DELAY_SUBDIV_QUARTER_TRIPLET,  // 1.333x multiplier (DOWN)
-  DELAY_SUBDIV_NORMAL,            // 1.0x multiplier (MIDDLE)
-  DELAY_SUBDIV_DOTTED_EIGHTH,    // 1.5x multiplier (UP)
+  DELAY_SUBDIV_QUARTER_TRIPLET,  // 0.6666x multiplier (DOWN) - 2/3 of quarter note
+  DELAY_SUBDIV_NORMAL,            // 1.0x multiplier (MIDDLE) - quarter note
+  DELAY_SUBDIV_DOTTED_EIGHTH,    // 0.75x multiplier (UP) - 3/4 of quarter note
 };
 
 enum TremoloMode {
@@ -196,9 +196,9 @@ constexpr TremoloMode K_TREMOLO_MODE_MAP[] = {
 };
 
 constexpr DelaySubdivision K_DELAY_SUBDIVISION_MAP[] = {
-  DELAY_SUBDIV_DOTTED_EIGHTH,     // UP (1.5x)
-  DELAY_SUBDIV_NORMAL,            // MIDDLE (1.0x)
-  DELAY_SUBDIV_QUARTER_TRIPLET,   // DOWN (1.333x)
+  DELAY_SUBDIV_DOTTED_EIGHTH,     // UP (0.75x - 3/4 of quarter note)
+  DELAY_SUBDIV_NORMAL,            // MIDDLE (1.0x - quarter note)
+  DELAY_SUBDIV_QUARTER_TRIPLET,   // DOWN (0.6666x - 2/3 of quarter note)
 };
 
 Delay delayL;
@@ -598,10 +598,10 @@ void applyDelaySubdivisionAndSetTargets(float masterDelaySamples) {
   float subdivisionMultiplier = 1.0f;
   switch (subdivision) {
     case DELAY_SUBDIV_DOTTED_EIGHTH:
-      subdivisionMultiplier = 1.5f;
+      subdivisionMultiplier = 0.75f;  // 3/4 of quarter note
       break;
     case DELAY_SUBDIV_QUARTER_TRIPLET:
-      subdivisionMultiplier = 1.333333f;  // 4/3
+      subdivisionMultiplier = 0.666666f;  // 2/3 of quarter note
       break;
     case DELAY_SUBDIV_NORMAL:
     default:
