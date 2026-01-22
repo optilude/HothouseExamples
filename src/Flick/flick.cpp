@@ -49,7 +49,7 @@ constexpr float TREMOLO_DEPTH_SCALE = 0.5f; // Scale factor for tremolo depth (0
 constexpr float TREMOLO_LED_BRIGHTNESS = 0.4f; // LED brightness when only tremolo is active
 
 // Delay constants
-constexpr float DELAY_TIME_MIN_SECONDS = 0.05f;  // Minimum delay time (50ms)
+constexpr float DELAY_TIME_MIN_SECONDS = 0.02f;  // Minimum delay time (20ms - enables doubling/slapback)
 constexpr float DELAY_WET_MIX_ATTENUATION = 0.333f; // Attenuation for wet delay signal
 constexpr float DELAY_DRY_WET_PERCENT_MAX = 100.0f; // Max value for dry/wet percentage
 
@@ -85,10 +85,10 @@ enum TremoloMode {
 
 // Tap tempo constants
 constexpr uint32_t TAP_TEMPO_TIMEOUT_MS = 5000;     // Exit tap tempo after 5 seconds
-constexpr uint32_t TAP_TEMPO_MIN_INTERVAL_MS = 50;  // Min 50ms = 1200 BPM (practical limit)
+constexpr uint32_t TAP_TEMPO_MIN_INTERVAL_MS = 20;  // Min 20ms = 3000 BPM (enables doubling/slapback)
 constexpr uint32_t TAP_TEMPO_MAX_INTERVAL_MS = 4000; // Max 4 seconds = 15 BPM
 constexpr float MS_PER_SECOND = 1000.0f;            // Milliseconds per second conversion
-constexpr float TAP_TEMPO_SAMPLES_MIN = (TAP_TEMPO_MIN_INTERVAL_MS / MS_PER_SECOND) * SAMPLE_RATE;  // 50ms
+constexpr float TAP_TEMPO_SAMPLES_MIN = (TAP_TEMPO_MIN_INTERVAL_MS / MS_PER_SECOND) * SAMPLE_RATE;  // 20ms
 constexpr float TAP_TEMPO_SAMPLES_MAX = (TAP_TEMPO_MAX_INTERVAL_MS / MS_PER_SECOND) * SAMPLE_RATE;  // 4s
 
 // DFU mode - both switches
@@ -590,6 +590,36 @@ void checkTapTempoTimeout() {
   }
 }
 
+void applyDelaySubdivisionAndSetTargets(float masterDelaySamples) {
+  // Get delay subdivision from SWITCH_3
+  DelaySubdivision subdivision = K_DELAY_SUBDIVISION_MAP[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
+
+  // Calculate subdivision multiplier
+  float subdivisionMultiplier = 1.0f;
+  switch (subdivision) {
+    case DELAY_SUBDIV_DOTTED_EIGHTH:
+      subdivisionMultiplier = 1.5f;
+      break;
+    case DELAY_SUBDIV_QUARTER_TRIPLET:
+      subdivisionMultiplier = 1.333333f;  // 4/3
+      break;
+    case DELAY_SUBDIV_NORMAL:
+    default:
+      subdivisionMultiplier = 1.0f;
+      break;
+  }
+
+  // Apply subdivision to master time
+  float finalDelayTime = masterDelaySamples * subdivisionMultiplier;
+
+  // Clamp to valid range
+  finalDelayTime = daisysp::fclamp(finalDelayTime, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
+
+  // Set delay targets
+  delayL.delayTarget = finalDelayTime;
+  delayR.delayTarget = finalDelayTime;
+}
+
 void checkDfuModeBothSwitches() {
   // Check if both footswitches are currently pressed
   bool fs1Pressed = hw.switches[Hothouse::FOOTSWITCH_1].Pressed();
@@ -689,6 +719,14 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       uint32_t slow_pulse = System::GetNow() % 1000;
       ledRight.Set(slow_pulse < 500 ? 1.0f : 0.1f);
     }
+
+    // Apply tap tempo delay time immediately while in tap tempo mode
+    applyDelaySubdivisionAndSetTargets(tapTempoDelaySamples);
+
+    // Also apply tremolo frequency in tap tempo mode
+    if (tapTempoControlsTremolo) {
+      osc.SetFreq(tapTempoTremoloFreqHz);
+    }
   } else {
     // Normal mode
     ledLeft.Set(bypassVerb ? 0.0f : 1.0f);
@@ -720,16 +758,17 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         // Knob has moved - take back control from tap tempo
         tapTempoControlsTremolo = false;
         osc.SetFreq(pTremSpeed.Process());
+        tremSpeedLastValue = tremSpeedCurrentValue; // Update on takeover
       } else {
         // Tap tempo still controls tremolo speed
         osc.SetFreq(tapTempoTremoloFreqHz);
+        // Don't update tremSpeedLastValue while tap tempo is in control
       }
     } else {
       // Normal knob control
       osc.SetFreq(pTremSpeed.Process());
+      tremSpeedLastValue = tremSpeedCurrentValue; // Track knob position
     }
-
-    tremSpeedLastValue = tremSpeedCurrentValue;
 
     static float depth = 0;
     depth = daisysp::fclamp(pTremDepth.Process(), 0.f, 1.f);
@@ -752,24 +791,6 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // Delay with subdivision and tap tempo support
     //
 
-    // Get delay subdivision from SWITCH_3
-    DelaySubdivision subdivision = K_DELAY_SUBDIVISION_MAP[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
-
-    // Calculate subdivision multiplier
-    float subdivisionMultiplier = 1.0f;
-    switch (subdivision) {
-      case DELAY_SUBDIV_DOTTED_EIGHTH:
-        subdivisionMultiplier = 1.5f;
-        break;
-      case DELAY_SUBDIV_QUARTER_TRIPLET:
-        subdivisionMultiplier = 1.333333f;  // 4/3
-        break;
-      case DELAY_SUBDIV_NORMAL:
-      default:
-        subdivisionMultiplier = 1.0f;
-        break;
-    }
-
     // Determine master delay time source
     float delayTimeCurrentValue = hw.knobs[Hothouse::KNOB_4].Value();
 
@@ -779,26 +800,20 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         // Knob has moved - take back control from tap tempo
         tapTempoControlsDelay = false;
         masterDelayTimeSamples = pDelayTime.Process();
+        delayTimeLastValue = delayTimeCurrentValue; // Update on takeover
       } else {
         // Tap tempo still controls
         masterDelayTimeSamples = tapTempoDelaySamples;
+        // Don't update delayTimeLastValue while tap tempo is in control
       }
     } else {
       // Normal knob control
       masterDelayTimeSamples = pDelayTime.Process();
+      delayTimeLastValue = delayTimeCurrentValue; // Track knob position
     }
 
-    delayTimeLastValue = delayTimeCurrentValue;
-
-    // Apply subdivision to master time
-    float finalDelayTime = masterDelayTimeSamples * subdivisionMultiplier;
-
-    // Clamp to valid range (important for subdivisions that could exceed MAX_DELAY)
-    finalDelayTime = daisysp::fclamp(finalDelayTime, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
-
-    // Set delay targets
-    delayL.delayTarget = finalDelayTime;
-    delayR.delayTarget = finalDelayTime;
+    // Apply subdivision and set delay targets
+    applyDelaySubdivisionAndSetTargets(masterDelayTimeSamples);
 
     // Feedback unchanged
     delayL.feedback = delayR.feedback = pDelayFeedback.Process();
