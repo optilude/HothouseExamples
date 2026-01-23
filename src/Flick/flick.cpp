@@ -294,10 +294,6 @@ Delay delayL;
 Delay delayR;
 int delayDryWet;
 
-float reverbTone;
-float reverbFeedback;
-float reverbSploodge;
-
 // Bypass vars
 Led ledLeft, ledRight;
 bool bypassVerb = true;
@@ -349,8 +345,6 @@ constexpr float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
 bool plateDiffusionEnabled = true;
 float platePreDelay = 0.;
 
-float plateDelay = 0.0;
-
 float plateDry = 1.0;
 float plateWet = 0.5;
 
@@ -365,13 +359,13 @@ float plateTankDiffusion = 0.85;
    * InputFilterHighCutoffPitch: 0.77 (7.77) is approx 3000Hz
    * TankFilterHighCutFrequency: 0.8 (8.0) is 3520Hz
    * 0.9507 is approx 10kHz
-   * 
+   *
    * mod speed: 0.5
    * mod depth: 0.5
    * mod shape: 0.75
    */
 
-// The damping values appear to be want to be between 0 and 10
+// The damping values should be between 0 and 10
 float plateInputDampLow = 2.87; // approx 100Hz
 float plateInputDampHigh = 7.25;
 
@@ -450,7 +444,14 @@ void loadSettings() {
   plateTankModDepth = localSettings.tankModDepth;
   plateTankModShape = localSettings.tankModShape;
   platePreDelay = localSettings.preDelay;
-  monoStereoMode = static_cast<MonoStereoMode>(localSettings.monoStereoMode);
+
+  // Validate and load mono-stereo mode
+  if (localSettings.monoStereoMode < MS_MODE_MIMO ||
+      localSettings.monoStereoMode > MS_MODE_SISO) {
+    monoStereoMode = MS_MODE_MIMO;  // Default to MIMO if invalid
+  } else {
+    monoStereoMode = static_cast<MonoStereoMode>(localSettings.monoStereoMode);
+  }
   updateReverbScales(monoStereoMode);
 
   // Load makeup gain setting
@@ -771,7 +772,7 @@ void applyDelaySubdivisionAndSetTargets(float masterDelaySamples) {
       subdivisionMultiplier = 0.75f;  // 3/4 of quarter note
       break;
     case DELAY_SUBDIV_QUARTER_TRIPLET:
-      subdivisionMultiplier = 0.666666f;  // 2/3 of quarter note
+      subdivisionMultiplier = 2.0f / 3.0f;  // 2/3 of quarter note (more precise)
       break;
     case DELAY_SUBDIV_NORMAL:
     default:
@@ -886,8 +887,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         ledRight.Set(0.1f);  // Dim when off
       }
     } else {
-      // No tempo set yet - slow pulse
-      uint32_t slow_pulse = System::GetNow() % 1000;
+      // No tempo set yet - slow pulse (reuse slow_pulse from above)
       ledRight.Set(slow_pulse < 500 ? 1.0f : 0.1f);
     }
 
@@ -1082,7 +1082,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     float sL, sR;
     sL = dryL;
     if (monoStereoMode == MS_MODE_MIMO || monoStereoMode == MS_MODE_MISO) {
-      // Use the mono signel (L) for both channels in MIMO and MISO modes
+      // Use the mono signal (L) for both channels in MIMO and MISO modes
       sR = dryL;
     } else {
       // Use both L & R inputs in SISO mode
@@ -1180,8 +1180,6 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
                   rightInput * MINUS_18DB_GAIN * MINUS_20DB_GAIN * (1.0f + inputAmplification * 7.0f) * clearPopCancelValue);
 
     if (!bypassVerb) {
-      // leftOutput = ((leftInput * plateDry * 0.1) + (verb.getLeftOutput() * plateWet * clearPopCancelValue));
-      // rightOutput = ((rightInput * plateDry * 0.1) + (verb.getRightOutput() * plateWet * clearPopCancelValue));
       leftOutput = ((leftInput * plateDry * reverbReverseScaleFactor) + (verb.getLeftOutput() * plateWet * clearPopCancelValue));
       rightOutput = ((rightInput * plateDry * reverbReverseScaleFactor) + (verb.getRightOutput() * plateWet * clearPopCancelValue));
 
@@ -1262,8 +1260,11 @@ int main() {
   // Dattorro Reverb Initialization
   //
   // Zero out the InterpDelay buffers used by the plate reverb
-  for(int i = 0; i < 50; i++) {
-    for(int j = 0; j < 144000; j++) {
+  // Note: 50 buffers of 144000 samples each (defined in Dattorro's InterpDelay implementation)
+  constexpr int NUM_REVERB_BUFFERS = 50;
+  constexpr int REVERB_BUFFER_SIZE = 144000;
+  for(int i = 0; i < NUM_REVERB_BUFFERS; i++) {
+    for(int j = 0; j < REVERB_BUFFER_SIZE; j++) {
       sdramData[i][j] = 0.;
     }
   }

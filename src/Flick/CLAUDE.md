@@ -129,7 +129,7 @@ Flick/
 - Standard performance mode
 - All knobs control their labeled functions
 - SWITCH_1: Reverb knob mode (dry/wet/mix)
-- SWITCH_2: Tremolo mode (Square/Sine/**Harmonic**)
+- SWITCH_2: Tremolo mode (Square/**Harmonic**/Sine)
 - SWITCH_3: Delay subdivision (Dotted 8th/Normal/Quarter triplet)
 
 **PEDAL_MODE_TAP_TEMPO** (line 49)
@@ -187,7 +187,7 @@ struct Settings {
 };
 ```
 
-**Version Control**: When `SETTINGS_VERSION` (line 39) is incremented, saved settings are invalidated and defaults are restored on next boot. Current version is **3**.
+**Version Control**: When `SETTINGS_VERSION` (line 39) is incremented, saved settings are invalidated and defaults are restored on next boot. Current version is **4**.
 
 ### Oscillator: [flick_oscillator.h](flick_oscillator.h) / [flick_oscillator.cpp](flick_oscillator.cpp)
 
@@ -275,13 +275,13 @@ struct Delay {
 | Control | Function | Range | Notes |
 |---------|----------|-------|-------|
 | **KNOB_1** | Reverb Dry/Wet | 0-100% | Behavior depends on SWITCH_1 |
-| **KNOB_2** | Tremolo Speed | 0.2-16 Hz | Logarithmic curve; overridden by tap tempo |
+| **KNOB_2** | Tremolo Speed | 0.1-10 Hz | Logarithmic curve; overridden by tap tempo |
 | **KNOB_3** | Tremolo Depth | 0-100% | Linear |
-| **KNOB_4** | Delay Time (Master Tempo) | 50ms-4sec | Logarithmic curve; overridden by tap tempo |
+| **KNOB_4** | Delay Time (Master Tempo) | 20ms-2sec | Logarithmic curve; overridden by tap tempo |
 | **KNOB_5** | Delay Feedback | 0-100% | Linear |
 | **KNOB_6** | Delay Mix | 0-100% | Linear |
 | **SWITCH_1** | Reverb Knob Mode | 3-position | UP=Wet Only, MID=Mix, DOWN=Dry Only |
-| **SWITCH_2** | Tremolo Mode | 3-position | UP=Square, MID=Sine, DOWN=**Harmonic** |
+| **SWITCH_2** | Tremolo Mode | 3-position | UP=Square, MID=**Harmonic**, DOWN=Sine |
 | **SWITCH_3** | Delay Subdivision | 3-position | UP=Dotted 8th (0.75x faster), MID=Normal (1:1), DOWN=Quarter triplet (0.666x faster) |
 | **FOOTSWITCH_1** | Reverb Bypass | Momentary | Press=bypass, Double=tap tempo, Long=reverb edit |
 | **FOOTSWITCH_2** | Delay Bypass | Momentary | Press=bypass, Double=tremolo toggle, Long=mono-stereo edit |
@@ -755,25 +755,25 @@ This prevents audio glitches from blocking flash writes in the audio callback.
 | Constant | Value | Location | Purpose |
 |----------|-------|----------|---------|
 | **Core Configuration** ||||
-| SETTINGS_VERSION | 3 | [line 39](flick.cpp:39) | Forces reset on structure change |
+| SETTINGS_VERSION | 4 | [line 39](flick.cpp:39) | Forces reset on structure change |
 | SAMPLE_RATE | 48000.0f | [line 42](flick.cpp:42) | Audio sample rate in Hz |
-| MAX_DELAY | SAMPLE_RATE * 2 | [line 43](flick.cpp:43) | 4 seconds max delay (96000 samples) |
+| MAX_DELAY | SAMPLE_RATE * 2 | [line 43](flick.cpp:43) | 2 seconds max delay (96000 samples) |
 | **Tremolo** ||||
-| TREMOLO_SPEED_MIN | 0.2 Hz | [line 46](flick.cpp:46) | Minimum tremolo speed |
-| TREMOLO_SPEED_MAX | 16.0 Hz | [line 47](flick.cpp:47) | Maximum tremolo speed |
+| TREMOLO_SPEED_MIN | 0.1 Hz | [line 46](flick.cpp:46) | Minimum tremolo speed |
+| TREMOLO_SPEED_MAX | 10.0 Hz | [line 47](flick.cpp:47) | Maximum tremolo speed |
 | TREMOLO_DEPTH_SCALE | 0.5 | [line 48](flick.cpp:48) | Depth scaling (0-0.5 range) |
 | TREMOLO_LED_BRIGHTNESS | 0.4 | [line 49](flick.cpp:49) | LED brightness when only tremolo active |
 | HARMONIC_TREMOLO_CROSSOVER_FREQ | 800 Hz | [line 246](flick.cpp:246) | Harmonic tremolo filter cutoff |
 | **Delay** ||||
-| DELAY_TIME_MIN_SECONDS | 0.05 sec | [line 52](flick.cpp:52) | Minimum delay time (50ms) |
+| DELAY_TIME_MIN_SECONDS | 0.02 sec | [line 52](flick.cpp:52) | Minimum delay time (20ms) |
 | DELAY_WET_MIX_ATTENUATION | 0.333 | [line 53](flick.cpp:53) | Attenuation for wet delay signal |
 | DELAY_DRY_WET_PERCENT_MAX | 100.0 | [line 54](flick.cpp:54) | Max dry/wet percentage |
 | **Tap Tempo** ||||
 | TAP_TEMPO_TIMEOUT_MS | 5000 ms | [line 87](flick.cpp:87) | Auto-exit tap tempo |
-| TAP_TEMPO_MIN_INTERVAL_MS | 50 ms | [line 88](flick.cpp:88) | Min tap interval (1200 BPM) |
+| TAP_TEMPO_MIN_INTERVAL_MS | 20 ms | [line 88](flick.cpp:88) | Min tap interval (3000 BPM) |
 | TAP_TEMPO_MAX_INTERVAL_MS | 4000 ms | [line 89](flick.cpp:89) | Max tap interval (15 BPM) |
 | MS_PER_SECOND | 1000.0 | [line 90](flick.cpp:90) | Milliseconds per second conversion |
-| TAP_TEMPO_SAMPLES_MIN | Calculated | [line 91](flick.cpp:91) | 50ms in samples (2400 @ 48kHz) |
+| TAP_TEMPO_SAMPLES_MIN | Calculated | [line 91](flick.cpp:91) | 20ms in samples (960 @ 48kHz) |
 | TAP_TEMPO_SAMPLES_MAX | Calculated | [line 92](flick.cpp:92) | 4s in samples (192000 @ 48kHz) |
 | TAP_TEMPO_BLINK_DUTY_CYCLE | 0.1 | [line 57](flick.cpp:57) | 10% duty cycle for LED blink |
 | KNOB_TAKEOVER_THRESHOLD | 0.05 | [line 230](flick.cpp:230) | 5% knob movement to exit tap tempo |
@@ -880,15 +880,15 @@ KNOB 6: Delay Mix                                        FS2 Long:   Mono-Stereo
 
 ### New Features (2026-01-10)
 
-- **Tap Tempo**: Double-press FS1, tap FS2 to set **both delay and tremolo** tempo (50ms-4s range)
+- **Tap Tempo**: Double-press FS1, tap FS2 to set **both delay and tremolo** tempo (20ms-4s range)
   - Delay and tremolo knobs independently return control with >5% movement
   - Does not persist across restarts (safer, prevents state misalignment)
-- **Delay Subdivisions**: Dotted eighth (0.75x faster), normal (1:1), quarter triplet (0.666x faster)
+- **Delay Subdivisions**: Dotted eighth (0.75x faster), normal (1:1), quarter triplet (2/3 faster)
 - **Harmonic Tremolo**: Splits signal at 800Hz, modulates high/low bands 180° out of phase
 - **Makeup Gain Persistence**: Now saved to flash, set in mono-stereo edit mode (SWITCH_2)
 - **DFU Mode Update**: Both footswitches held 5+ seconds (was: FS1 long press)
 - **Code Quality**: Named constants (`SAMPLE_RATE`, `MS_PER_SECOND`) replace magic numbers
-- **Settings Version**: Current version is 3
+- **Settings Version**: Current version is 4
 
 ---
 

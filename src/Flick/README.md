@@ -33,7 +33,7 @@ Updated demo video (6 January 2025):
 | KNOB 5 | Delay Feedback |  |
 | KNOB 6 | Delay Dry/Wet Amount |  |
 | SWITCH 1 | Reverb knob function | **UP** - 0% Dry, 0-100% Wet<br/>**MIDDLE** - Dry/Wet Mix<br/>**DOWN** - 100% Dry, 0-100% Wet |
-| SWITCH 2 | Tremolo Mode | **UP** - Square wave<br/>**MIDDLE** - Sine wave<br/>**DOWN** - Harmonic tremolo |
+| SWITCH 2 | Tremolo Mode | **UP** - Square wave<br/>**MIDDLE** - Harmonic tremolo<br/>**DOWN** - Sine wave |
 | SWITCH 3 | Delay Subdivision | **UP** - Dotted eighth (3/4)<br/>**MIDDLE** - Normal (1:1)<br/>**DOWN** - Quarter note triplet (2/3) |
 | FOOTSWITCH 1 | Reverb On/Off | **Press:** Toggle reverb on/off<br/>**Double-press:** Enter Tap Tempo mode (see below)<br/>**Long press:** Enter Reverb Edit mode (see below) |
 | FOOTSWITCH 2 | Delay/Tremolo On/Off | **Press:** Toggle delay on/off<br/>**Double-press:** Toggle tremolo on/off<br/>**Long press:** Enter Mono-Stereo Edit mode (see below)<br/><br/>**LED:**<br/>- 100% when only delay is active<br/>- 40% pulsing when only tremolo is active<br/>- 100% pulsing when both are active |
@@ -56,13 +56,13 @@ To enter DFU mode for firmware updates via USB:
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
 | FOOTSWITCH 1 | **EXIT** Tap Tempo Mode | Returns to normal mode without changing tempo |
-| FOOTSWITCH 2 | **TAP** Tempo | Each tap sets the delay time and tremolo speed based on interval between taps<br/>Tempo range: 50ms - 4 seconds (15-1200 BPM) |
+| FOOTSWITCH 2 | **TAP** Tempo | Each tap sets the delay time and tremolo speed based on interval between taps<br/>Tempo range: 20ms - 4 seconds (15-3000 BPM) |
 
 **Behavior:**
 - Tap tempo overrides KNOB 2 (tremolo speed) and KNOB 4 (delay time)
 - Moving either knob more than 5% returns control to that knob independently
 - Delay subdivisions (SWITCH 3) apply to tap tempo delay time
-- Tremolo speed is set to the tap tempo frequency (clamped to 0.2-16 Hz)
+- Tremolo speed is set to the tap tempo frequency (clamped to 0.1-10 Hz)
 - Mode auto-exits after 5 seconds of no taps
 - Tap tempo does **not** persist across power cycles
 
