@@ -27,9 +27,9 @@ Updated demo video (6 January 2025):
 | CONTROL | DESCRIPTION | NOTES |
 |-|-|-|
 | KNOB 1 | Reverb Dry/Wet Amount |  |
-| KNOB 2 | Tremolo Speed | Overridden by tap tempo until knob is moved >5%. |
+| KNOB 2 | Tremolo Speed | Overridden by tap tempo until knob is moved >5%. 0.1Hz min to 10Hz max.|
 | KNOB 3 | Tremolo Depth |  |
-| KNOB 4 | Delay Time | Sets master tempo for delay subdivisions. Overridden by tap tempo until knob is moved >5%. |
+| KNOB 4 | Delay Time | Sets master tempo for delay subdivisions. Overridden by tap tempo until knob is moved >5%. 20ms min, 2s max. |
 | KNOB 5 | Delay Feedback |  |
 | KNOB 6 | Delay Dry/Wet Amount |  |
 | SWITCH 1 | Reverb knob function | **UP** - 0% Dry, 0-100% Wet<br/>**MIDDLE** - Dry/Wet Mix<br/>**DOWN** - 100% Dry, 0-100% Wet |

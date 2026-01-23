@@ -40,7 +40,7 @@ constexpr int SETTINGS_VERSION = 4;
 
 // Audio configuration constants
 constexpr float SAMPLE_RATE = 48000.0f;  // Audio sample rate in Hz
-constexpr size_t MAX_DELAY = static_cast<size_t>(SAMPLE_RATE * 2.0f); // 4 second max delay
+constexpr size_t MAX_DELAY = static_cast<size_t>(SAMPLE_RATE * 2.0f); // 2 second max delay
 
 // Tremolo constants
 constexpr float TREMOLO_SPEED_MIN = 0.1f;   // Minimum tremolo speed in Hz
