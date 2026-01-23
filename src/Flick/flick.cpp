@@ -535,6 +535,28 @@ void enterTapTempoMode() {
   tapTempoActive = true;
   tapTempoLastTapTime = System::GetNow();
   // Don't clear existing tap tempo data - allow refinement
+
+  // Set tap tempo control flags based on which effects are currently active
+  bool delayActive = !bypassDelay;
+  bool tremoloActive = !bypassTrem;
+
+  if (!delayActive && !tremoloActive) {
+    // Neither effect active: set tempo for both
+    tapTempoControlsDelay = true;
+    tapTempoControlsTremolo = true;
+  } else if (delayActive && tremoloActive) {
+    // Both effects active: set tempo for both
+    tapTempoControlsDelay = true;
+    tapTempoControlsTremolo = true;
+  } else if (delayActive && !tremoloActive) {
+    // Only delay active: set tempo for delay only
+    tapTempoControlsDelay = true;
+    tapTempoControlsTremolo = false;
+  } else if (!delayActive && tremoloActive) {
+    // Only tremolo active: set tempo for tremolo only
+    tapTempoControlsDelay = false;
+    tapTempoControlsTremolo = true;
+  }
 }
 
 void exitTapTempoMode() {
@@ -569,9 +591,9 @@ void handleTapTempoTap() {
       // Clamp to tremolo speed range
       tapTempoTremoloFreqHz = daisysp::fclamp(tapTempoTremoloFreqHz, TREMOLO_SPEED_MIN, TREMOLO_SPEED_MAX);
 
-      // Enable tap tempo control for both delay and tremolo
-      tapTempoControlsDelay = true;
-      tapTempoControlsTremolo = true;
+      // Tap tempo control flags are set in enterTapTempoMode() based on which
+      // effects were active when entering tap tempo mode. They remain set until
+      // the user manually takes control by moving the relevant knob.
       masterDelayTimeSamples = tapTempoDelaySamples;
     }
   }
@@ -701,8 +723,9 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     }
   } else if (pedalMode == PEDAL_MODE_TAP_TEMPO) {
     // Tap tempo mode
-    // LED_1: Solid on to indicate tap tempo mode
-    ledLeft.Set(1.0f);
+    // LED_1: Slow pulse to indicate tap tempo mode
+    uint32_t slow_pulse = System::GetNow() % 1000;
+    ledLeft.Set(slow_pulse < 500 ? 1.0f : 0.1f);
 
     // LED_2: Blink at current tempo (if tempo set)
     if (tapTempoIntervalMs > 0) {
