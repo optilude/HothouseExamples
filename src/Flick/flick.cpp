@@ -94,6 +94,89 @@ constexpr float TAP_TEMPO_SAMPLES_MAX = (TAP_TEMPO_MAX_INTERVAL_MS / MS_PER_SECO
 // DFU mode - both switches
 constexpr uint32_t DFU_BOTH_SWITCHES_HOLD_TIME_MS = 5000;  // 5 seconds
 
+// Knob takeover threshold
+constexpr float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required for takeover
+
+// Helper structures for soft takeover functionality
+// Used to prevent parameter jumps when entering edit modes or switching control sources
+
+// Tracks knob position and implements soft takeover with movement threshold
+struct KnobTakeover {
+  daisy::AnalogControl* knob;    // Pointer to the analog control (knob)
+  float entryValue;              // Knob position when control was suspended
+  bool takenOver;                // Whether knob has moved enough to take control
+
+  // Default constructor
+  KnobTakeover() : knob(nullptr), entryValue(0.0f), takenOver(false) {}
+
+  // Initialize with direct reference to the analog control
+  void init(daisy::AnalogControl& knobRef) {
+    knob = &knobRef;
+  }
+
+  // Reset takeover state and capture current knob position
+  void capture() {
+    if (knob) {
+      entryValue = knob->Value();
+      takenOver = false;
+    }
+  }
+
+  // Check if knob has moved enough to take over control
+  // Returns true if knob is actively controlling (either already taken over or just took over)
+  bool checkTakeover(float threshold = KNOB_TAKEOVER_THRESHOLD) {
+    if (!knob) return false;
+
+    float currentValue = knob->Value();
+    if (!takenOver) {
+      if (fabs(currentValue - entryValue) > threshold) {
+        takenOver = true;
+        return true;  // Just taken over - knob now controls
+      }
+      return false;   // Not yet taken over - knob doesn't control
+    }
+    return true;      // Already taken over - knob controls
+  }
+};
+
+// Tracks switch position and detects changes
+struct SwitchChangeDetector {
+  Hothouse* hw;                         // Pointer to hardware interface
+  Hothouse::Toggleswitch switchIndex;   // Which toggleswitch this monitors
+  int entryPosition;                    // Switch position when tracking started
+  bool changed;                         // Whether switch has been moved from entry position
+
+  // Default constructor
+  SwitchChangeDetector() : hw(nullptr), switchIndex(Hothouse::TOGGLESWITCH_1), entryPosition(0), changed(false) {}
+
+  // Initialize with hardware reference and toggleswitch index
+  void init(Hothouse& hwRef, Hothouse::Toggleswitch switchIdx) {
+    hw = &hwRef;
+    switchIndex = switchIdx;
+  }
+
+  // Reset change state and capture current switch position
+  void capture() {
+    if (hw) {
+      entryPosition = hw->GetToggleswitchPosition(switchIndex);
+      changed = false;
+    }
+  }
+
+  // Check if switch position has changed from entry position
+  // Returns true if switch has been moved (either just changed or previously changed)
+  bool checkChange() {
+    if (!hw) return false;
+
+    int currentPosition = hw->GetToggleswitchPosition(switchIndex);
+    if (!changed && currentPosition != entryPosition) {
+      changed = true;
+      return true;    // Just changed
+    }
+    return changed;   // Return current changed state
+  }
+};
+
 // Persistent Settings
 struct Settings {
   int version; // Version of the settings struct
@@ -230,10 +313,21 @@ bool tapTempoControlsDelay = false;  // True when tap tempo overrides knob
 float tapTempoTremoloFreqHz = 0.0f;
 bool tapTempoControlsTremolo = false;  // True when tap tempo overrides tremolo knob
 
-// Knob takeover for KNOB_4 (delay time) and KNOB_2 (tremolo speed)
-float delayTimeLastValue = 0.0f;
-float tremSpeedLastValue = 0.0f;
-constexpr float KNOB_TAKEOVER_THRESHOLD = 0.05f;  // 5% movement required
+// Tap tempo knob takeover for KNOB_4 (delay time) and KNOB_2 (tremolo speed)
+KnobTakeover tapTempoDelayKnobTakeover;    // KNOB_4: Delay time
+KnobTakeover tapTempoTremoloKnobTakeover;  // KNOB_2: Tremolo speed
+
+// Reverb edit mode soft takeover
+// Prevents parameters from jumping when entering edit mode
+KnobTakeover reverbEditWetAmountKnob;    // Reverb wet amount (preview only, not saved)
+KnobTakeover reverbEditPreDelayKnob;     // Pre-delay time (0-250ms)
+KnobTakeover reverbEditDecayKnob;        // Reverb decay time
+KnobTakeover reverbEditDiffusionKnob;    // Tank diffusion amount
+KnobTakeover reverbEditInputCutKnob;     // Input high-cut filter frequency
+KnobTakeover reverbEditTankCutKnob;      // Tank high-cut filter frequency
+SwitchChangeDetector reverbEditModSpeedSwitch;  // Tank modulation speed
+SwitchChangeDetector reverbEditModDepthSwitch;  // Tank modulation depth
+SwitchChangeDetector reverbEditModShapeSwitch;  // Tank modulation shape
 
 // Master delay time (before subdivision multiplier)
 float masterDelayTimeSamples = 0.0f;
@@ -546,6 +640,21 @@ void handleLongPress(Hothouse::Switches footswitch) {
   if (footswitch == Hothouse::FOOTSWITCH_1) {
     // Long-press on left footswitch: Enter reverb edit mode
     bypassVerb = false;  // Make sure reverb is ON
+
+    // Initialize soft takeover FIRST - capture current knob/switch positions
+    // CRITICAL: Must reset state BEFORE changing mode to avoid race condition
+    // with audio interrupt seeing new mode but stale takeover state
+    reverbEditWetAmountKnob.capture();
+    reverbEditPreDelayKnob.capture();
+    reverbEditDecayKnob.capture();
+    reverbEditDiffusionKnob.capture();
+    reverbEditInputCutKnob.capture();
+    reverbEditTankCutKnob.capture();
+    reverbEditModSpeedSwitch.capture();
+    reverbEditModDepthSwitch.capture();
+    reverbEditModShapeSwitch.capture();
+
+    // Change mode LAST - after all state is initialized
     pedalMode = PEDAL_MODE_EDIT_REVERB;
   } else if (footswitch == Hothouse::FOOTSWITCH_2) {
     // Long-press on right footswitch: Enter mono-stereo config
@@ -559,7 +668,9 @@ void handleLongPress(Hothouse::Switches footswitch) {
 }
 
 void enterTapTempoMode() {
-  pedalMode = PEDAL_MODE_TAP_TEMPO;
+  // CRITICAL: Initialize all state BEFORE changing mode to avoid race condition
+  // with audio interrupt seeing new mode but stale state
+
   tapTempoActive = true;
   tapTempoLastTapTime = System::GetNow();
   // Don't clear existing tap tempo data - allow refinement
@@ -585,11 +696,20 @@ void enterTapTempoMode() {
     tapTempoControlsDelay = false;
     tapTempoControlsTremolo = true;
   }
+
+  // Initialize knob takeover - capture current positions
+  // Knobs won't take back control until moved >5%
+  tapTempoDelayKnobTakeover.capture();
+  tapTempoTremoloKnobTakeover.capture();
+
+  // Change mode LAST - after all state is initialized
+  pedalMode = PEDAL_MODE_TAP_TEMPO;
 }
 
 void exitTapTempoMode() {
-  pedalMode = PEDAL_MODE_NORMAL;
+  // Set state before changing mode for consistency
   tapTempoActive = false;
+  pedalMode = PEDAL_MODE_NORMAL;
 }
 
 void handleTapTempoTap() {
@@ -800,25 +920,20 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
   plateWet = pVerbAmt.Process();
 
   if (pedalMode == PEDAL_MODE_NORMAL) {
-    // Tremolo speed with tap tempo support
-    float tremSpeedCurrentValue = hw.knobs[Hothouse::KNOB_2].Value();
-
+    // Tremolo speed with tap tempo support and soft takeover
     if (tapTempoControlsTremolo) {
-      // Check for knob takeover (5% movement)
-      if (fabs(tremSpeedCurrentValue - tremSpeedLastValue) > KNOB_TAKEOVER_THRESHOLD) {
-        // Knob has moved - take back control from tap tempo
+      // Tap tempo is controlling - check if knob has taken back control
+      if (tapTempoTremoloKnobTakeover.checkTakeover()) {
+        // Knob has moved >5% - take back control from tap tempo
         tapTempoControlsTremolo = false;
         osc.SetFreq(pTremSpeed.Process());
-        tremSpeedLastValue = tremSpeedCurrentValue; // Update on takeover
       } else {
-        // Tap tempo still controls tremolo speed
+        // Knob hasn't moved enough - tap tempo still controls
         osc.SetFreq(tapTempoTremoloFreqHz);
-        // Don't update tremSpeedLastValue while tap tempo is in control
       }
     } else {
       // Normal knob control
       osc.SetFreq(pTremSpeed.Process());
-      tremSpeedLastValue = tremSpeedCurrentValue; // Track knob position
     }
 
     static float depth = 0;
@@ -842,25 +957,20 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // Delay with subdivision and tap tempo support
     //
 
-    // Determine master delay time source
-    float delayTimeCurrentValue = hw.knobs[Hothouse::KNOB_4].Value();
-
+    // Determine master delay time source with soft takeover
     if (tapTempoControlsDelay) {
-      // Check for knob takeover (5% movement)
-      if (fabs(delayTimeCurrentValue - delayTimeLastValue) > KNOB_TAKEOVER_THRESHOLD) {
-        // Knob has moved - take back control from tap tempo
+      // Tap tempo is controlling - check if knob has taken back control
+      if (tapTempoDelayKnobTakeover.checkTakeover()) {
+        // Knob has moved >5% - take back control from tap tempo
         tapTempoControlsDelay = false;
         masterDelayTimeSamples = pDelayTime.Process();
-        delayTimeLastValue = delayTimeCurrentValue; // Update on takeover
       } else {
-        // Tap tempo still controls
+        // Knob hasn't moved enough - tap tempo still controls
         masterDelayTimeSamples = tapTempoDelaySamples;
-        // Don't update delayTimeLastValue while tap tempo is in control
       }
     } else {
       // Normal knob control
       masterDelayTimeSamples = pDelayTime.Process();
-      delayTimeLastValue = delayTimeCurrentValue; // Track knob position
     }
 
     // Apply subdivision and set delay targets
@@ -883,30 +993,61 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         break;
     }
   } else if (pedalMode == PEDAL_MODE_EDIT_REVERB) {
-    // Edit mode
+    // Edit mode with soft takeover - parameters only change when controls are moved
     plateDry = 1.0; // Always use dry 100% in edit mode
-    platePreDelay = pKnob2.Process() * 0.25;
-    plateDecay = pKnob3.Process();
-    plateTankDiffusion = pKnob4.Process();
-    plateInputDampHigh = pKnob5.Process() * 10.0; // Dattorro takes values for this between 0 and 10
-    plateTankDampHigh = pKnob6.Process() * 10.0; // Dattorro takes values for this between 0 and 10
 
-    //
-    // Read in all of the toggle switch values
-    //
+    // KNOB_1: Reverb wet amount (not saved, just for preview)
+    if (reverbEditWetAmountKnob.checkTakeover()) {
+      plateWet = pVerbAmt.Process();
+    }
 
-    // Switch 1 - Tank Mod Speed
+    // KNOB_2: Pre-delay (0-250ms)
+    if (reverbEditPreDelayKnob.checkTakeover()) {
+      platePreDelay = pKnob2.Process() * 0.25;
+    }
+
+    // KNOB_3: Decay time
+    if (reverbEditDecayKnob.checkTakeover()) {
+      plateDecay = pKnob3.Process();
+    }
+
+    // KNOB_4: Tank diffusion
+    if (reverbEditDiffusionKnob.checkTakeover()) {
+      plateTankDiffusion = pKnob4.Process();
+    }
+
+    // KNOB_5: Input high-cut frequency (0-10 pitch scale)
+    if (reverbEditInputCutKnob.checkTakeover()) {
+      plateInputDampHigh = pKnob5.Process() * 10.0; // Dattorro takes values for this between 0 and 10
+    }
+
+    // KNOB_6: Tank high-cut frequency (0-10 pitch scale)
+    if (reverbEditTankCutKnob.checkTakeover()) {
+      plateTankDampHigh = pKnob6.Process() * 10.0; // Dattorro takes values for this between 0 and 10
+    }
+
+    // SWITCH_1: Tank Mod Speed
     static const float tank_mod_speed_values[] = {0.5f, 0.25f, 0.1f};
-    plateTankModSpeed = tank_mod_speed_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1)];
+    if (reverbEditModSpeedSwitch.checkChange()) {
+      int switch1Pos = hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_1);
+      plateTankModSpeed = tank_mod_speed_values[switch1Pos];
+    }
 
-    // Switch 2 - Tank Mod Depth
+    // SWITCH_2: Tank Mod Depth
     static const float tank_mod_depth_values[] = {0.5f, 0.25f, 0.1f};
-    plateTankModDepth = tank_mod_depth_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+    if (reverbEditModDepthSwitch.checkChange()) {
+      int switch2Pos = hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2);
+      plateTankModDepth = tank_mod_depth_values[switch2Pos];
+    }
 
-    // Switch 3 - Tank Mod Shape
+    // SWITCH_3: Tank Mod Shape
     static const float tank_mod_shape_values[] = {0.5f, 0.25f, 0.1f};
-    plateTankModShape = tank_mod_shape_values[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
+    if (reverbEditModShapeSwitch.checkChange()) {
+      int switch3Pos = hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3);
+      plateTankModShape = tank_mod_shape_values[switch3Pos];
+    }
 
+    // Always apply current parameter values to reverb engine
     verb.setDecay(plateDecay);
     verb.setTankDiffusion(plateTankDiffusion);
     verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
@@ -1093,6 +1234,19 @@ int main() {
   delMemR.Init();
   delayL.del = &delMemL;
   delayR.del = &delMemR;
+
+  // Initialize knob takeover and switch change detection for soft takeover
+  tapTempoDelayKnobTakeover.init(hw.knobs[Hothouse::KNOB_4]);
+  tapTempoTremoloKnobTakeover.init(hw.knobs[Hothouse::KNOB_2]);
+  reverbEditWetAmountKnob.init(hw.knobs[Hothouse::KNOB_1]);
+  reverbEditPreDelayKnob.init(hw.knobs[Hothouse::KNOB_2]);
+  reverbEditDecayKnob.init(hw.knobs[Hothouse::KNOB_3]);
+  reverbEditDiffusionKnob.init(hw.knobs[Hothouse::KNOB_4]);
+  reverbEditInputCutKnob.init(hw.knobs[Hothouse::KNOB_5]);
+  reverbEditTankCutKnob.init(hw.knobs[Hothouse::KNOB_6]);
+  reverbEditModSpeedSwitch.init(hw, Hothouse::TOGGLESWITCH_1);
+  reverbEditModDepthSwitch.init(hw, Hothouse::TOGGLESWITCH_2);
+  reverbEditModShapeSwitch.init(hw, Hothouse::TOGGLESWITCH_3);
 
   osc.Init(hw.AudioSampleRate());
 
