@@ -50,7 +50,7 @@ To enter DFU mode for firmware updates via USB:
 *Entered by double-pressing FOOTSWITCH 1 in normal mode.*
 
 **LED Indication:**
-- **LED 1 (left):** Solid on
+- **LED 1 (left):** Pulses slowly
 - **LED 2 (right):** Blinks at current tempo (slow pulse if no tempo set yet)
 
 | CONTROL | DESCRIPTION | NOTES |
