@@ -36,7 +36,7 @@ using daisysp::fonepole;
 
 /// Increment this when changing the settings struct so the software will know
 /// to reset to defaults if this ever changes.
-constexpr int SETTINGS_VERSION = 3;
+constexpr int SETTINGS_VERSION = 4;
 
 // Audio configuration constants
 constexpr float SAMPLE_RATE = 48000.0f;  // Audio sample rate in Hz
@@ -107,6 +107,9 @@ struct Settings {
   float preDelay;
   int monoStereoMode;
   int makeupGainMode;       // Makeup gain setting
+  bool bypassReverb;        // Reverb bypass state (true = bypassed)
+  bool bypassDelay;         // Delay bypass state (true = bypassed)
+  bool bypassTremolo;       // Tremolo bypass state (true = bypassed)
 
   //Overloading the != operator
   //This is necessary as this operator is used in the PersistentStorage source code
@@ -122,7 +125,10 @@ struct Settings {
       a.tankModShape == tankModShape &&
       a.preDelay == preDelay &&
       a.monoStereoMode == monoStereoMode &&
-      a.makeupGainMode == makeupGainMode
+      a.makeupGainMode == makeupGainMode &&
+      a.bypassReverb == bypassReverb &&
+      a.bypassDelay == bypassDelay &&
+      a.bypassTremolo == bypassTremolo
     );
   }
 };
@@ -362,6 +368,12 @@ void loadSettings() {
     currentMakeupGain = TV_MAKEUP_GAIN_NORMAL;
   }
 
+  // Load bypass states - defensive: default to bypassed (true) on any doubt
+  // Boolean values are inherently safe (0 or 1), but we still validate defensively
+  bypassVerb = localSettings.bypassReverb;
+  bypassDelay = localSettings.bypassDelay;
+  bypassTrem = localSettings.bypassTremolo;
+
   verb.setPreDelay(platePreDelay);
   verb.setInputFilterHighCutoffPitch(plateInputDampHigh);
   verb.setDecay(plateDecay);
@@ -394,6 +406,16 @@ void saveMonoStereoSettings() {
 
   localSettings.monoStereoMode = monoStereoMode;
   localSettings.makeupGainMode = currentMakeupGain;  // NEW: Save makeup gain
+
+  triggerSettingsSave = true;
+}
+
+void saveBypassStates() {
+  Settings &localSettings = savedSettings.GetSettings();
+
+  localSettings.bypassReverb = bypassVerb;
+  localSettings.bypassDelay = bypassDelay;
+  localSettings.bypassTremolo = bypassTrem;
 
   triggerSettingsSave = true;
 }
@@ -493,6 +515,9 @@ void handleNormalPress(Hothouse::Switches footswitch) {
   } else {
     bypassDelay = !bypassDelay;
   }
+
+  // Save bypass state to persistent storage
+  saveBypassStates();
 }
 
 void handleDoublePress(Hothouse::Switches footswitch) {
@@ -511,6 +536,9 @@ void handleDoublePress(Hothouse::Switches footswitch) {
   } else if (footswitch == Hothouse::FOOTSWITCH_2) {
     // UNCHANGED: Toggle tremolo bypass
     bypassTrem = !bypassTrem;
+
+    // Save bypass state to persistent storage
+    saveBypassStates();
   }
 }
 
@@ -1106,7 +1134,10 @@ int main() {
     plateTankModShape,
     platePreDelay,
     MS_MODE_MIMO,               // monoStereoMode
-    TV_MAKEUP_GAIN_NORMAL       // makeupGainMode (NEW)
+    TV_MAKEUP_GAIN_NORMAL,      // makeupGainMode
+    true,                       // bypassReverb (defensive default: bypassed)
+    true,                       // bypassDelay (defensive default: bypassed)
+    true                        // bypassTremolo (defensive default: bypassed)
   };
   savedSettings.Init(defaultSettings);
 
