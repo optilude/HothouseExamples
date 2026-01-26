@@ -43,9 +43,9 @@ constexpr float SAMPLE_RATE = 48000.0f;  // Audio sample rate in Hz
 constexpr size_t MAX_DELAY = static_cast<size_t>(SAMPLE_RATE * 2.0f); // 2 second max delay
 
 // Tremolo constants
-constexpr float TREMOLO_SPEED_MIN = 0.1f;   // Minimum tremolo speed in Hz
-constexpr float TREMOLO_SPEED_MAX = 10.0f;  // Maximum tremolo speed in Hz
-constexpr float TREMOLO_DEPTH_SCALE = 0.5f; // Scale factor for tremolo depth (0-0.5 range)
+constexpr float TREMOLO_SPEED_MIN = 0.2f;   // Minimum tremolo speed in Hz
+constexpr float TREMOLO_SPEED_MAX = 16.0f;  // Maximum tremolo speed in Hz
+constexpr float TREMOLO_DEPTH_SCALE = 1.0f; // Scale factor for tremolo depth
 constexpr float TREMOLO_LED_BRIGHTNESS = 0.4f; // LED brightness when only tremolo is active
 
 // Delay constants
