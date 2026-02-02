@@ -339,7 +339,7 @@ TremDelMakeUpGain currentMakeupGain = TV_MAKEUP_GAIN_NORMAL;
 using daisysp::Svf;
 Svf harmonicFilterL;  // State variable filter for crossover
 Svf harmonicFilterR;
-constexpr float HARMONIC_TREMOLO_CROSSOVER_FREQ = 800.0f;  // Hz
+constexpr float HARMONIC_TREMOLO_CROSSOVER_FREQ = 700.0f;  // Hz
 
 // Reverb vars
 bool plateDiffusionEnabled = true;
@@ -936,14 +936,22 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       osc.SetFreq(pTremSpeed.Process());
     }
 
-    static float depth = 0;
-    depth = daisysp::fclamp(pTremDepth.Process(), 0.f, 1.f);
-    depth *= TREMOLO_DEPTH_SCALE;
-    osc.SetAmp(depth);
-    dcOffset = 1.f - depth;
-
     // Get tremolo mode from SWITCH_2
     TremoloMode tremMode = K_TREMOLO_MODE_MAP[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+
+    static float depth = 0;
+    depth = daisysp::fclamp(pTremDepth.Process(), 0.f, 1.f);
+
+    if (tremMode == TREMOLO_HARMONIC) {
+      // Harmonic tremolo requires different depth scale to keep it similar to
+      // the other modes.
+      depth *= 0.75f;
+    } else {
+      depth *= 0.5f;
+    }
+
+    osc.SetAmp(depth);
+    dcOffset = 1.f - depth;
 
     // Set oscillator waveform based on mode (not used for harmonic)
     if (tremMode == TREMOLO_SQUARE) {
@@ -1142,7 +1150,12 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       if (tremMode == TREMOLO_HARMONIC) {
         // === HARMONIC TREMOLO ===
 
+        // Modulate crossover frequency for subtle pitch modulation effect
+        float modFreq = HARMONIC_TREMOLO_CROSSOVER_FREQ + lfoSample * 50.0f;
+        modFreq = fmaxf(200.0f, fminf(2000.0f, modFreq)); // clamp to reasonable range
+
         // Process left channel
+        harmonicFilterL.SetFreq(modFreq);
         harmonicFilterL.Process(sL);
         float lowL = harmonicFilterL.Low();
         float highL = harmonicFilterL.High();
@@ -1153,6 +1166,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         sL = (lowModL + highModL) * tremMakeupGain;
 
         // Process right channel
+        harmonicFilterR.SetFreq(modFreq);
         harmonicFilterR.Process(sR);
         float lowR = harmonicFilterR.Low();
         float highR = harmonicFilterR.High();
@@ -1253,8 +1267,8 @@ int main() {
   harmonicFilterR.Init(hw.AudioSampleRate());
   harmonicFilterL.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
   harmonicFilterR.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
-  harmonicFilterL.SetRes(0.5f);  // Minimal resonance for flat response
-  harmonicFilterR.SetRes(0.5f);
+  harmonicFilterL.SetRes(0.2f);
+  harmonicFilterR.SetRes(0.2f);
 
   //
   // Dattorro Reverb Initialization
