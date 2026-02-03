@@ -69,9 +69,6 @@ int main() {
     // Initialize Core with pointer to delay lines
     core.Init(hw.AudioSampleRate(), &delMemL, &delMemR);
 
-    // Configure for Funbox: Use Switch 3 for Makeup Gain
-    core.SetSwitch3Function(SWITCH3_MAKEUP_GAIN);
-
     // Initial Dattorro Buffer Clear (from Funbox original)
     // Assuming sdramData is accessible. If not, this loop might need adjustment.
     // NOTE: sdramData is defined in InterpDelay.cpp in Hothouse repo and seemingly Funbox repo.

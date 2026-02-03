@@ -23,8 +23,7 @@ FlickCore::FlickCore()
       factory_reset_stage_(0),
       reset_blink_interval_(1000),
       last_led_toggle_time_(0),
-      led_toggle_state_(false),
-      switch3_function_(SWITCH3_DELAY_SUBDIVISION) 
+      led_toggle_state_(false)
 {
     // Defaults for reverb
     plate_diffusion_enabled = true;
@@ -203,36 +202,7 @@ void FlickCore::ProcessControls(int sw1, int sw2, int sw3) {
              master_delay_time_samples = p_delay_time.Process();
         }
 
-        if (switch3_function_ == SWITCH3_DELAY_SUBDIVISION) {
-            applyDelaySubdivisionAndSetTargets(master_delay_time_samples, sw3);
-        } else {
-             // SWITCH3_MAKEUP_GAIN
-             static const TremDelMakeUpGain kMakeupGainMap[] = {
-                  MAKEUP_GAIN_HEAVY,                      // UP (2) (Funbox RIGHT?) - Wait, Funbox map was RIGHT/MID/LEFT.
-                  MAKEUP_GAIN_NORMAL,                     // MIDDLE (1)
-                  MAKEUP_GAIN_NONE,                       // DOWN (0)
-                  // Funbox code: right=Heavy, mid=Normal, Left=None.
-                  // If right is 0, then 0=Heavy.
-                  // Default Daisy: 0,1,2 usually maps physically.
-                  // I will assume the map {Heavy, Normal, None} matches indexes 0,1,2 or 2,1,0 appropriately if I just define it.
-                  // FunBox original map:
-                  // {MAKEUP_GAIN_HEAVY, MAKEUP_GAIN_NORMAL, MAKEUP_GAIN_NONE}
-             };
-             // Safely index
-             int idx = sw3;
-             if (idx < 0) {
-                 idx = 0;
-             }
-             if (idx > 2) {
-                 idx = 2;
-             }
-             current_makeup_gain = kMakeupGainMap[idx];
-             
-             // In this mode, no subdivision is applied, just raw time
-             float final_delay_time = daisysp::fclamp(master_delay_time_samples, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY_SIZE);
-             delayL.delay_target = final_delay_time;
-             delayR.delay_target = final_delay_time;
-        }
+        applyDelaySubdivisionAndSetTargets(master_delay_time_samples, sw3);
 
         delayL.feedback = delayR.feedback = p_delay_feedback.Process();
         delay_drywet = (int)p_delay_amt.Process();

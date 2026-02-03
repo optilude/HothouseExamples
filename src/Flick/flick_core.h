@@ -225,18 +225,10 @@ struct HighPassFilter {
     }
 };
 
-enum Switch3Function {
-    SWITCH3_DELAY_SUBDIVISION,
-    SWITCH3_MAKEUP_GAIN
-};
-
 class FlickCore {
 public:
     FlickCore();
     ~FlickCore();
-
-    // Configuration
-    void SetSwitch3Function(Switch3Function function) { switch3_function_ = function; }
 
     // Initialize with delay lines and sample rate
     void Init(float sample_rate, 
@@ -395,8 +387,6 @@ private:
     float hardLimit100_(const float &x);
 
     Settings saved_state_;
-    
-    Switch3Function switch3_function_;
 };
 
 #endif // FLICK_CORE_H
