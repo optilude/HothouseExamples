@@ -1,6 +1,6 @@
 // Flick for Hothouse DIY DSP Platform
 // Copyright (C) 2024 Boyd Timothy <btimothy@gmail.com>
-// Refactored for modular core.
+// Refactored with modular effect classes (ReverbEffect, TremoloEffect, DelayEffect).
 
 #include "daisy.h"
 #include "daisysp.h"
@@ -25,18 +25,6 @@ FlickCore core;
 // Delay Memory in SDRAM
 DelayLine<float, MAX_DELAY_SIZE> DSY_SDRAM_BSS delMemL;
 DelayLine<float, MAX_DELAY_SIZE> DSY_SDRAM_BSS delMemR;
-
-// Dattorro SDRAM Buffers
-// We need to define them if they are extern in Dattorro.hpp
-// Assuming Dattorro logic requires this or it is defined in Dattorro.cpp/hpp
-// Original flick.cpp assumed access to `sdramData`.
-// We'll leave it out and assume Dattorro handles it or we'll get a linker error if we don't define it
-// but `sdramData` looks like a variable name. If it's not defined in Dattorro.hpp, it was defined in flick.cpp?
-// I don't see `float sdramData...` in original flick.cpp 1-1000.
-// If it was there, it was probably at the very top or via include.
-// If I search context, `Dattorro.hpp` is in `PlateauNEVersio/Dattorro.hpp`.
-// I can't check it easily.
-// I'll proceed.
 
 // Global LEDs
 daisy::Led led_left, led_right;

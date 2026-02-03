@@ -6,6 +6,7 @@ TARGET = flick
 
 # Sources and Hothouse header files
 CPP_SOURCES = flick.cpp flick_core.cpp flick_oscillator.cpp ../hothouse.cpp
+CPP_SOURCES += flick_reverb_effect.cpp flick_tremolo_effect.cpp flick_delay_effect.cpp
 
 # Add PlateauNEVersio sources
 CPP_SOURCES += PlateauNEVersio/utilities/Utilities.cpp

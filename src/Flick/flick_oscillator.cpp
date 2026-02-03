@@ -5,7 +5,7 @@
 #define PI_F 3.1415927410125732421875f
 #define TWOPI_F (2.0f * PI_F)
 
-using namespace clevelandmusicco;
+using namespace flick;
 static inline float Polyblep(float phase_inc, float t);
 
 float FlickOscillator::Process() {

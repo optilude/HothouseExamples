@@ -1,11 +1,51 @@
 // Flick for Funbox DIY DSP Platform
-// Refactored for modular core.
+// Refactored with modular effect classes (ReverbEffect, TremoloEffect, DelayEffect).
+//
+// NOTE: This file is draft/untestable in this repository as it requires the 
+// Funbox hardware abstraction layer. It serves as a template showing how the
+// same FlickCore can be used with different hardware platforms.
+//
+// For the original Funbox implementation, see:
+// https://github.com/joulupukki/FunBox/blob/joulupukki/add-flick/software/Flick/flick.cpp
 
 #include "daisy.h"
 #include "daisysp.h"
-#include "funbox_gpl.h" // Assuming this is the header for Funbox
+// #include "funbox_gpl.h"  // Funbox hardware abstraction (not available in this repo)
 #include "flick_core.h"
-#include "Dattorro.hpp" // For sdramData visibility if needed
+
+// Funbox namespace (stub for compilation reference)
+namespace flick {
+    // This is a stub - actual implementation would come from funbox_gpl.h
+    class Funbox {
+    public:
+        enum Switches { FOOTSWITCH_1, FOOTSWITCH_2 };
+        enum Knobs { KNOB_1, KNOB_2, KNOB_3, KNOB_4, KNOB_5, KNOB_6 };
+        enum LEDs { LED_1, LED_2 };
+        enum Toggles { TOGGLESWITCH_1, TOGGLESWITCH_2, TOGGLESWITCH_3 };
+        
+        struct FootswitchCallbacks {
+            void (*HandleNormalPress)(Switches);
+            void (*HandleDoublePress)(Switches);
+            void (*HandleLongPress)(Switches);
+        };
+        
+        daisy::DaisySeed seed;
+        daisy::AnalogControl knobs[6];
+        daisy::Switch switches[2];
+        
+        void Init(bool) {}
+        void SetAudioBlockSize(size_t) {}
+        void SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate) {}
+        float AudioSampleRate() { return 48000.0f; }
+        void RegisterFootswitchCallbacks(FootswitchCallbacks*) {}
+        void StartAdc() {}
+        void StartAudio(daisy::AudioHandle::AudioCallback) {}
+        void ProcessAllControls() {}
+        void DelayMs(uint32_t) {}
+        void CheckResetToBootloader() {}
+        int GetToggleswitchPosition(Toggles) { return 1; }
+    };
+}
 
 using flick::Funbox;
 using daisy::AudioHandle;
@@ -115,15 +155,9 @@ int main() {
     while(true) {
         core.CheckTapTempoTimeout();
         
-        // Funbox standard bootloader check
-        if (core.GetSettings().mono_stereo_mode == MS_MODE_MIMO) { // Just checking if we are in normal operation?
-             // Original: if (pedal_mode == PEDAL_MODE_NORMAL) hw.CheckResetToBootloader();
-             // We can check if core is not in edit mode?
-             // Accessing pedal_mode on core? No accessor.
-             // But CheckResetToBootloader is usually safe to call.
-             // Original code checks pedal_mode.
-             // We assume normal mode if not factory reset or implicit.
-             hw.CheckResetToBootloader();
+        // Funbox standard bootloader check - only in normal mode
+        if (core.GetPedalMode() == PEDAL_MODE_NORMAL) {
+            hw.CheckResetToBootloader();
         }
 
         if (core.ShouldSaveSettings()) {

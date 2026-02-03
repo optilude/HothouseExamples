@@ -1,10 +1,10 @@
 #pragma once
-#ifndef CMC_EXT_OSCILLATOR_H
-#define CMC_EXT_OSCILLATOR_H
+#ifndef FLICK_OSCILLATOR_H
+#define FLICK_OSCILLATOR_H
 #include <stdint.h>
 #ifdef __cplusplus
 
-namespace clevelandmusicco {
+namespace flick {
 /** Synthesis of several waveforms, including polyBLEP bandlimited waveforms.
  */
 class FlickOscillator {
@@ -63,7 +63,7 @@ class FlickOscillator {
 
   /** Gets the current frequency of the oscillator.
    */
-  inline float GetFreq() { return freq_; }
+  inline float GetFreq() const { return freq_; }
   
   /** Changes the frequency of the Oscillator, and recalculates phase
    * increment.
@@ -75,7 +75,7 @@ class FlickOscillator {
   
   /** Gets the amplitude of the oscillator.
    */
-  inline float GetAmp() { return amp_; }
+  inline float GetAmp() const { return amp_; }
   
   /** Sets the amplitude of the waveform.
    */
@@ -130,6 +130,6 @@ class FlickOscillator {
   float last_out_, last_freq_;
   bool eor_, eoc_;
 };
-}  // namespace clevelandmusicco
+}  // namespace flick
 #endif
 #endif
