@@ -712,22 +712,22 @@ void enterTapTempoMode() {
   // Don't clear existing tap tempo data - allow refinement
 
   // Set tap tempo control flags based on which effects are currently active
-  bool delayActive = !bypass_delay;
-  bool tremoloActive = !bypass_trem;
+  bool delay_active = !bypass_delay;
+  bool tremolo_active = !bypass_trem;
 
-  if (!delayActive && !tremoloActive) {
+  if (!delay_active && !tremolo_active) {
     // Neither effect active: set tempo for both
     tap_tempo_controls_delay = true;
     tap_tempo_controls_tremolo = true;
-  } else if (delayActive && tremoloActive) {
+  } else if (delay_active && tremolo_active) {
     // Both effects active: set tempo for both
     tap_tempo_controls_delay = true;
     tap_tempo_controls_tremolo = true;
-  } else if (delayActive && !tremoloActive) {
+  } else if (delay_active && !tremolo_active) {
     // Only delay active: set tempo for delay only
     tap_tempo_controls_delay = true;
     tap_tempo_controls_tremolo = false;
-  } else if (!delayActive && tremoloActive) {
+  } else if (!delay_active && tremolo_active) {
     // Only tremolo active: set tempo for tremolo only
     tap_tempo_controls_delay = false;
     tap_tempo_controls_tremolo = true;
@@ -801,46 +801,46 @@ void applyDelaySubdivisionAndSetTargets(float masterDelaySamples) {
   DelaySubdivision subdivision = kDelaySubdivisionMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_3)];
 
   // Calculate subdivision multiplier
-  float subdivisionMultiplier = 1.0f;
+  float subdivision_multiplier = 1.0f;
   switch (subdivision) {
     case DELAY_SUBDIV_DOTTED_EIGHTH:
-      subdivisionMultiplier = 0.75f;  // 3/4 of quarter note
+      subdivision_multiplier = 0.75f;  // 3/4 of quarter note
       break;
     case DELAY_SUBDIV_QUARTER_TRIPLET:
-      subdivisionMultiplier = 2.0f / 3.0f;  // 2/3 of quarter note (more precise)
+      subdivision_multiplier = 2.0f / 3.0f;  // 2/3 of quarter note (more precise)
       break;
     case DELAY_SUBDIV_NORMAL:
     default:
-      subdivisionMultiplier = 1.0f;
+      subdivision_multiplier = 1.0f;
       break;
   }
 
   // Apply subdivision to master time
-  float finalDelayTime = masterDelaySamples * subdivisionMultiplier;
+  float final_delay_time = masterDelaySamples * subdivision_multiplier;
 
   // Clamp to valid range
-  finalDelayTime = daisysp::fclamp(finalDelayTime, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
+  final_delay_time = daisysp::fclamp(final_delay_time, TAP_TEMPO_SAMPLES_MIN, (float)MAX_DELAY);
 
   // Set delay targets
-  delayL.delay_target = finalDelayTime;
-  delayR.delay_target = finalDelayTime;
+  delayL.delay_target = final_delay_time;
+  delayR.delay_target = final_delay_time;
 }
 
 void checkDfuModeBothSwitches() {
   // Check if both footswitches are currently pressed
-  bool fs1Pressed = hw.switches[Hothouse::FOOTSWITCH_1].Pressed();
-  bool fs2Pressed = hw.switches[Hothouse::FOOTSWITCH_2].Pressed();
+  bool fs1_pressed = hw.switches[Hothouse::FOOTSWITCH_1].Pressed();
+  bool fs2_pressed = hw.switches[Hothouse::FOOTSWITCH_2].Pressed();
 
-  if (fs1Pressed && fs2Pressed) {
+  if (fs1_pressed && fs2_pressed) {
     if (!both_switches_pressed) {
       // Just started pressing both
       both_switches_press_start_time = System::GetNow();
       both_switches_pressed = true;
     } else {
       // Check how long both have been held
-      uint32_t holdDuration = System::GetNow() - both_switches_press_start_time;
+      uint32_t hold_duration = System::GetNow() - both_switches_press_start_time;
 
-      if (holdDuration >= DFU_BOTH_SWITCHES_HOLD_TIME_MS) {
+      if (hold_duration >= DFU_BOTH_SWITCHES_HOLD_TIME_MS) {
         // Enter DFU mode - flash LEDs to indicate
         for (int i = 0; i < 5; i++) {
           led_left.Set(1.0f);
@@ -972,12 +972,12 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     }
 
     // Get tremolo mode from SWITCH_2
-    TremoloMode tremMode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+    TremoloMode trem_mode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
 
     static float depth = 0;
     depth = daisysp::fclamp(p_trem_depth.Process(), 0.f, 1.f);
 
-    if (tremMode == TREMOLO_HARMONIC) {
+    if (trem_mode == TREMOLO_HARMONIC) {
       // Harmonic tremolo requires different depth scale to keep it similar to
       // the other modes.
       depth *= 1.25f;
@@ -989,9 +989,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     dc_offset = 1.f - depth;
 
     // Set oscillator waveform based on mode (not used for harmonic)
-    if (tremMode == TREMOLO_SQUARE) {
+    if (trem_mode == TREMOLO_SQUARE) {
       osc.SetWaveform(FlickOscillator::WAVE_SQUARE_ROUNDED);
-    } else if (tremMode == TREMOLO_SINE || tremMode == TREMOLO_HARMONIC) {
+    } else if (trem_mode == TREMOLO_SINE || trem_mode == TREMOLO_HARMONIC) {
       osc.SetWaveform(FlickOscillator::WAVE_SIN);
     }
     // For harmonic mode, waveform doesn't matter much (use sine)
@@ -1120,16 +1120,16 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
   }
 
   for (size_t i = 0; i < size; ++i) {
-    float dry_L = in[0][i];
-    float dry_R = in[1][i];
-    float s_L, s_R;
-    s_L = dry_L;
+    float dry_l = in[0][i];
+    float dry_r = in[1][i];
+    float s_l, s_r;
+    s_l = dry_l;
     if (mono_stereo_mode == MS_MODE_MIMO || mono_stereo_mode == MS_MODE_MISO) {
       // Use the mono signal (L) for both channels in MIMO and MISO modes
-      s_R = dry_L;
+      s_r = dry_l;
     } else {
       // Use both L & R inputs in SISO mode
-      s_R = dry_R;
+      s_r = dry_r;
     }
 
     // Get makeup gain values (now from global variable)
@@ -1153,60 +1153,60 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     }
 
     if (!bypass_delay) {
-      float mixL = 0;
-      float mixR = 0;
+      float mix_l = 0;
+      float mix_r = 0;
       float fdrywet = delay_drywet / DELAY_DRY_WET_PERCENT_MAX;
 
       // update delayline with feedback
-      float sigL = delayL.Process(s_L);
-      float sigR = delayR.Process(s_R);
-      mixL += sigL;
-      mixR += sigR;
+      float sig_l = delayL.Process(s_l);
+      float sig_r = delayR.Process(s_r);
+      mix_l += sig_l;
+      mix_r += sig_r;
 
       // apply drywet and attenuate
-      s_L = fdrywet * mixL * DELAY_WET_MIX_ATTENUATION + (1.0f - fdrywet) * s_L * delay_make_up_gain;
-      s_R = fdrywet * mixR * DELAY_WET_MIX_ATTENUATION + (1.0f - fdrywet) * s_R * delay_make_up_gain;
+      s_l = fdrywet * mix_l * DELAY_WET_MIX_ATTENUATION + (1.0f - fdrywet) * s_l * delay_make_up_gain;
+      s_r = fdrywet * mix_r * DELAY_WET_MIX_ATTENUATION + (1.0f - fdrywet) * s_r * delay_make_up_gain;
     }
 
     if (!bypass_trem) {
       // Get tremolo mode from SWITCH_2 (in normal mode)
-      TremoloMode tremMode = TREMOLO_SINE;  // Default
+      TremoloMode trem_mode = TREMOLO_SINE;  // Default
       if (pedal_mode == PEDAL_MODE_NORMAL) {
-        tremMode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
+        trem_mode = kTremoloModeMap[hw.GetToggleswitchPosition(Hothouse::TOGGLESWITCH_2)];
       }
 
       // Generate LFO sample
-      float lfoSample = osc.Process();
+      float lfo_sample = osc.Process();
 
       // DC offset to make LFO unipolar (0 to peak) - for LED display
-      trem_val = dc_offset + lfoSample;
+      trem_val = dc_offset + lfo_sample;
 
       // Apply tremolo based on mode
-      if (tremMode == TREMOLO_HARMONIC) {
+      if (trem_mode == TREMOLO_HARMONIC) {
         // === HARMONIC TREMOLO ===
 
         // Process left channel
-        float lowL = low_pass_l.Process(s_L);
-        float highL = high_pass_l.Process(s_L);  // 90° phase difference
+        float low_l = low_pass_l.Process(s_l);
+        float high_l = high_pass_l.Process(s_l);  // 90° phase difference
 
         // Apply tremolo with opposite phase to each band
-        float lowModL = lowL * (1.0f + lfoSample);
-        float highModL = highL * (1.0f - lfoSample);  // Inverted phase
-        s_L = (lowModL + highModL) * trem_make_up_gain;
+        float low_mod_l = low_l * (1.0f + lfo_sample);
+        float high_mod_l = high_l * (1.0f - lfo_sample);  // Inverted phase
+        s_l = (low_mod_l + high_mod_l) * trem_make_up_gain;
 
         // Process right channel
-        float lowR = low_pass_r.Process(s_R);
-        float highR = high_pass_r.Process(s_R);  // 90° phase difference
+        float low_r = low_pass_r.Process(s_r);
+        float high_r = high_pass_r.Process(s_r);  // 90° phase difference
 
-        float lowModR = lowR * (1.0f + lfoSample);
-        float highModR = highR * (1.0f - lfoSample);
-        s_R = (lowModR + highModR) * trem_make_up_gain;
+        float low_mod_r = low_r * (1.0f + lfo_sample);
+        float high_mod_r = high_r * (1.0f - lfo_sample);
+        s_r = (low_mod_r + high_mod_r) * trem_make_up_gain;
 
       } else {
         // === STANDARD TREMOLO (Square or Sine) ===
 
-        s_L *= trem_val * trem_make_up_gain;
-        s_R *= trem_val * trem_make_up_gain;
+        s_l *= trem_val * trem_make_up_gain;
+        s_r *= trem_val * trem_make_up_gain;
       }
     }
 
@@ -1214,8 +1214,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     // enabled again it will already have the current input signal already
     // being processed.
 
-    left_input = hardLimit100_(s_L) * reverb_dry_scale_factor;
-    right_input = hardLimit100_(s_R) * reverb_dry_scale_factor;
+    left_input = hardLimit100_(s_l) * reverb_dry_scale_factor;
+    right_input = hardLimit100_(s_r) * reverb_dry_scale_factor;
 
     verb.process(left_input * minus_18db_gain * minus_20db_gain * (1.0f + input_amplification * 7.0f) * clearPopCancelValue,
                   right_input * minus_18db_gain * minus_20db_gain * (1.0f + input_amplification * 7.0f) * clearPopCancelValue);
@@ -1224,17 +1224,17 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       left_output = ((left_input * plate_dry * reverb_reverse_scale_factor) + (verb.getLeftOutput() * plate_wet * clearPopCancelValue));
       right_output = ((right_input * plate_dry * reverb_reverse_scale_factor) + (verb.getRightOutput() * plate_wet * clearPopCancelValue));
 
-      s_L = left_output;
-      s_R = right_output;
+      s_l = left_output;
+      s_r = right_output;
     }
 
     if (mono_stereo_mode == MS_MODE_MIMO) {
-      out[0][i] = (s_L * 0.5) + (s_R * 0.5); // Sum the processed left and right channels
+      out[0][i] = (s_l * 0.5) + (s_r * 0.5); // Sum the processed left and right channels
       out[1][i] = 0.0f; // Mute the unused channel
     } else {
       // Send stereo output in MISO and SISO
-      out[0][i] = s_L;
-      out[1][i] = s_R;
+      out[0][i] = s_l;
+      out[1][i] = s_r;
     }
   }
 }
@@ -1317,7 +1317,7 @@ int main() {
   verb.setInputFilterLowCutoffPitch(plate_input_damp_low);
   verb.setTankFilterLowCutFrequency(plate_tank_damp_low);
 
-  Settings defaultSettings = {
+  Settings default_settings = {
     SETTINGS_VERSION, // version
     plate_decay,
     plate_tank_diffusion,
@@ -1333,7 +1333,7 @@ int main() {
     true,                       // bypass_delay (defensive default: bypassed)
     true                        // bypass_tremolo (defensive default: bypassed)
   };
-  SavedSettings.Init(defaultSettings);
+  SavedSettings.Init(default_settings);
 
   loadSettings();
 
