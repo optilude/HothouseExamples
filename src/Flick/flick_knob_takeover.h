@@ -22,7 +22,9 @@ struct KnobTakeover {
     float entry_value;    // Knob position when control was suspended
     bool taken_over;      // Whether knob has moved enough to take control
 
-    KnobTakeover() : entry_value(0.0f), taken_over(false) {}
+    // Initialize taken_over to true so knob controls by default.
+    // Call capture() when entering soft-takeover mode (e.g., after tap tempo sets a value)
+    KnobTakeover() : entry_value(0.0f), taken_over(true) {}
 
     /**
      * @brief Reset takeover state and capture current knob position

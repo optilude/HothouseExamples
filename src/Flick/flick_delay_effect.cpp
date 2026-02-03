@@ -49,11 +49,11 @@ void DelayEffect::ProcessControls(FlickCore* core, int sw1, int sw2, int sw3) {
     // If not taken over, delay time is set externally (tap tempo)
     
     // Map switch 3 to subdivision
-    // 0=DOWN, 1=MIDDLE, 2=UP
+    // Hothouse switch: UP=0, MIDDLE=1, DOWN=2
     static const Subdivision kSubdivMap[] = {
-        SUBDIV_QUARTER_TRIPLET,  // DOWN: 0.666x
-        SUBDIV_NORMAL,           // MIDDLE: 1.0x
-        SUBDIV_DOTTED_EIGHTH,    // UP: 0.75x
+        SUBDIV_DOTTED_EIGHTH,    // UP (0): 0.75x - 3/4 of quarter note
+        SUBDIV_NORMAL,           // MIDDLE (1): 1.0x - quarter note
+        SUBDIV_QUARTER_TRIPLET,  // DOWN (2): 0.666x - 2/3 of quarter note
     };
     current_subdivision_ = kSubdivMap[sw3];
     ApplySubdivision(current_subdivision_);

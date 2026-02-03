@@ -6,6 +6,7 @@
 #include "daisysp.h"
 #include "hothouse.h"
 #include "flick_core.h"
+#include "PlateauNEVersio/dsp/delays/InterpDelay.hpp"
 
 using clevelandmusicco::Hothouse;
 using daisy::AudioHandle;
@@ -59,6 +60,16 @@ int main() {
     core.InitControls(&hw.knobs[Hothouse::KNOB_1], &hw.knobs[Hothouse::KNOB_2],
                       &hw.knobs[Hothouse::KNOB_3], &hw.knobs[Hothouse::KNOB_4],
                       &hw.knobs[Hothouse::KNOB_5], &hw.knobs[Hothouse::KNOB_6]);
+
+    // Zero out the Dattorro reverb SDRAM buffers before initializing
+    // Note: 50 buffers of 144000 samples each (defined in InterpDelay.hpp)
+    for(int i = 0; i < 50; i++) {
+        for(int j = 0; j < 144000; j++) {
+            sdramData[i][j] = 0.f;
+        }
+    }
+    // Set hold to 1.0 or plate reverb won't produce output
+    hold = 1.f;
 
     core.Init(hw.AudioSampleRate(), &delMemL, &delMemR);
 

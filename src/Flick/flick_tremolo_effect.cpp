@@ -47,9 +47,12 @@ void TremoloEffect::ProcessControls(FlickCore* core, int sw1, int sw2, int sw3) 
     float depth = daisysp::fclamp(p_depth_.Process(), 0.0f, 1.0f);
     
     // Determine mode from switch 2
-    // Map: 0=DOWN, 1=MIDDLE, 2=UP
-    // Original mapping: DOWN=Sine, MIDDLE=Harmonic, UP=Square
-    static const Mode kModeMap[] = {MODE_SINE, MODE_HARMONIC, MODE_SQUARE};
+    // Hothouse switch: UP=0, MIDDLE=1, DOWN=2
+    static const Mode kModeMap[] = {
+        MODE_SQUARE,    // UP (0): Square wave tremolo
+        MODE_HARMONIC,  // MIDDLE (1): Harmonic tremolo
+        MODE_SINE,      // DOWN (2): Sine wave tremolo
+    };
     current_mode_ = kModeMap[sw2];
     
     // Adjust depth based on mode

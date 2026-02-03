@@ -12,6 +12,7 @@
 #include "daisysp.h"
 // #include "funbox_gpl.h"  // Funbox hardware abstraction (not available in this repo)
 #include "flick_core.h"
+#include "PlateauNEVersio/dsp/delays/InterpDelay.hpp"
 
 // Funbox namespace (stub for compilation reference)
 namespace flick {
@@ -87,10 +88,6 @@ void quickLedFlash() {
     hw.DelayMs(500);
 }
 
-// SDRAM Data for Dattorro - assuming it's available via linkage
-// If not, we might need:
-// extern float sdramData[50][144000];
-
 int main() {
     hw.Init(true);
     hw.SetAudioBlockSize(8);
@@ -106,29 +103,18 @@ int main() {
                       &hw.knobs[Funbox::KNOB_3], &hw.knobs[Funbox::KNOB_4],
                       &hw.knobs[Funbox::KNOB_5], &hw.knobs[Funbox::KNOB_6]);
 
-    // Initialize Core with pointer to delay lines
-    core.Init(hw.AudioSampleRate(), &delMemL, &delMemR);
-
-    // Initial Dattorro Buffer Clear (from Funbox original)
-    // Assuming sdramData is accessible. If not, this loop might need adjustment.
-    // NOTE: sdramData is defined in InterpDelay.cpp in Hothouse repo and seemingly Funbox repo.
-    // We assume it is accessible here.
-    /*
+    // Zero out the Dattorro reverb SDRAM buffers before initializing
+    // Note: 50 buffers of 144000 samples each (defined in InterpDelay.hpp)
     for(int i = 0; i < 50; i++) {
         for(int j = 0; j < 144000; j++) {
-            sdramData[i][j] = 0.;
+            sdramData[i][j] = 0.f;
         }
     }
-    */
-    // Since we don't have visibility of Dattorro internals here as easily, and FlickCore::Init
-    // might handle Dattorro init (it calls verb constructor), we check if manual clear is needed.
-    // FlickCore instantiates Dattorro verb. 
-    // Dattorro constructor usually sets up filters.
-    // The manual clear in main() suggests Dattorro doesn't clear SDRAM on init?
-    // We will leave it commented or skip it if FlickCore handles it reasonably well. 
-    // Actually, FlickCore doesn't touch sdramData explicitly.
-    // To match original behavior, ideally we should do it. But without sdramData symbol...
-    // Let's assume it works without or rely on BSS zeroing if configured (SDRAM might not be zeroed).
+    // Set hold to 1.0 or plate reverb won't produce output
+    hold = 1.f;
+
+    // Initialize Core with pointer to delay lines
+    core.Init(hw.AudioSampleRate(), &delMemL, &delMemR);
 
     // Set defaults
     core.RestoreDefaults();

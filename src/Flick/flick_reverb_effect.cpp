@@ -1,5 +1,6 @@
 #include "flick_reverb_effect.h"
 #include "flick_core.h"
+#include "PlateauNEVersio/dsp/delays/InterpDelay.hpp"
 
 namespace flick {
 
@@ -148,14 +149,15 @@ void ReverbEffect::ProcessSample(float in_l, float in_r, float& out_l, float& ou
     
     // Always process verb (even when bypassed) to keep tails ready
     float gain = kMinus18dbGain * kMinus20dbGain * (1.0f + kInputAmplification * 7.0f);
-    verb_.process(left_input * gain, right_input * gain);
+    verb_.process(left_input * gain * clearPopCancelValue, 
+                  right_input * gain * clearPopCancelValue);
     
     if (!bypassed_) {
         // Mix dry and wet
         out_l = (left_input * plate_dry_ * reverb_reverse_scale_factor_) + 
-                (verb_.getLeftOutput() * plate_wet_);
+                (verb_.getLeftOutput() * plate_wet_ * clearPopCancelValue);
         out_r = (right_input * plate_dry_ * reverb_reverse_scale_factor_) + 
-                (verb_.getRightOutput() * plate_wet_);
+                (verb_.getRightOutput() * plate_wet_ * clearPopCancelValue);
     } else {
         // Bypassed: pass through scaled input
         out_l = in_l;
