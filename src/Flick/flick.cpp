@@ -335,11 +335,46 @@ bool bothSwitchesPressed = false;
 // Current makeup gain setting (persisted)
 TremDelMakeUpGain currentMakeupGain = TV_MAKEUP_GAIN_NORMAL;
 
-// Harmonic tremolo state
-using daisysp::Svf;
-Svf harmonicFilterL;  // State variable filter for crossover
-Svf harmonicFilterR;
-constexpr float HARMONIC_TREMOLO_CROSSOVER_FREQ = 700.0f;  // Hz
+// Harmonic tremolo state (filter cutoffs taken from Fender 6G12-A schematic)
+constexpr float HARMONIC_TREMOLO_LPF_CUTOFF = 144.0f; // 220K and 5nF LPF
+constexpr float HARMONIC_TREMOLO_HPF_CUTOFF = 636.0f; // 1M and 250pF HPF
+
+struct LowPassFilter {
+    float alpha;
+    float prev_y = 0.0f;
+
+    void Init(float fc, float fs) {
+        alpha = expf(-2.0f * M_PI * fc / fs);
+    }
+
+    float Process(float x) {
+        float y = (1.0f - alpha) * x + alpha * prev_y;
+        prev_y = y;
+        return y;
+    }
+};
+
+struct HighPassFilter {
+    float alpha;
+    float prev_x = 0.0f;
+    float prev_y = 0.0f;
+
+    void Init(float fc, float fs) {
+        alpha = expf(-2.0f * M_PI * fc / fs);
+    }
+
+    float Process(float x) {
+        float y = (1.0f + alpha) * 0.5f * (x - prev_x) + alpha * prev_y;
+        prev_x = x;
+        prev_y = y;
+        return y;
+    }
+};
+
+LowPassFilter lowPassL;
+LowPassFilter lowPassR;
+HighPassFilter highPassL;
+HighPassFilter highPassR;
 
 // Reverb vars
 bool plateDiffusionEnabled = true;
@@ -945,7 +980,7 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
     if (tremMode == TREMOLO_HARMONIC) {
       // Harmonic tremolo requires different depth scale to keep it similar to
       // the other modes.
-      depth *= 0.75f;
+      depth *= 1.25f;
     } else {
       depth *= 0.5f;
     }
@@ -1150,15 +1185,9 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
       if (tremMode == TREMOLO_HARMONIC) {
         // === HARMONIC TREMOLO ===
 
-        // Modulate crossover frequency for subtle pitch modulation effect
-        float modFreq = HARMONIC_TREMOLO_CROSSOVER_FREQ + lfoSample * 50.0f;
-        modFreq = fmaxf(200.0f, fminf(2000.0f, modFreq)); // clamp to reasonable range
-
         // Process left channel
-        harmonicFilterL.SetFreq(modFreq);
-        harmonicFilterL.Process(sL);
-        float lowL = harmonicFilterL.Low();
-        float highL = harmonicFilterL.High();
+        float lowL = lowPassL.Process(sL);
+        float highL = highPassL.Process(sL);  // 90° phase difference
 
         // Apply tremolo with opposite phase to each band
         float lowModL = lowL * (1.0f + lfoSample);
@@ -1166,10 +1195,8 @@ void audioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out,
         sL = (lowModL + highModL) * tremMakeupGain;
 
         // Process right channel
-        harmonicFilterR.SetFreq(modFreq);
-        harmonicFilterR.Process(sR);
-        float lowR = harmonicFilterR.Low();
-        float highR = harmonicFilterR.High();
+        float lowR = lowPassR.Process(sR);
+        float highR = highPassR.Process(sR);  // 90° phase difference
 
         float lowModR = lowR * (1.0f + lfoSample);
         float highModR = highR * (1.0f - lfoSample);
@@ -1262,13 +1289,11 @@ int main() {
 
   osc.Init(hw.AudioSampleRate());
 
-  // Initialize harmonic tremolo filters (state variable filters for crossover)
-  harmonicFilterL.Init(hw.AudioSampleRate());
-  harmonicFilterR.Init(hw.AudioSampleRate());
-  harmonicFilterL.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
-  harmonicFilterR.SetFreq(HARMONIC_TREMOLO_CROSSOVER_FREQ);
-  harmonicFilterL.SetRes(0.2f);
-  harmonicFilterR.SetRes(0.2f);
+  // Initialize harmonic tremolo filters
+  lowPassL.Init(HARMONIC_TREMOLO_LPF_CUTOFF, hw.AudioSampleRate());
+  lowPassR.Init(HARMONIC_TREMOLO_LPF_CUTOFF, hw.AudioSampleRate());
+  highPassL.Init(HARMONIC_TREMOLO_HPF_CUTOFF, hw.AudioSampleRate());
+  highPassR.Init(HARMONIC_TREMOLO_HPF_CUTOFF, hw.AudioSampleRate());
 
   //
   // Dattorro Reverb Initialization
